@@ -5,7 +5,9 @@ import type { GuidanceResult } from './lib/scholarshipAi.ts'
 import { completedCourses } from './data/transcript.ts'
 import { courseTitles } from './data/courseTitles.ts'
 import { findSchool } from './data/schools/index.ts'
+import { usask } from './data/schools/usask.ts'
 import type { School } from './data/schools/types.ts'
+import { buildCallScript, type CallContext } from './lib/callScript.ts'
 import './App.css'
 
 type Lookup =
@@ -87,7 +89,7 @@ function useTickUp(target: number) {
 }
 
 function App() {
-  const [completed, setCompleted] = useState(() => new Set(completedCourses))
+  const [completed, setCompleted] = useState<Set<string>>(() => new Set())
   const completedRef = useRef(completed)
   completedRef.current = completed
   const matches = useMemo(() => computeMatches(completed), [completed])
@@ -159,7 +161,7 @@ function App() {
     })
   }
 
-  function resetToTranscript() {
+  function loadSampleStudent() {
     setCompleted(new Set(completedCourses))
     setHeroId(null)
   }
@@ -234,6 +236,43 @@ function App() {
     }
   }
 
+  // --- additive: one-way scripted phone reminder (does not read or affect lookup/resources state) ---
+  const topAward = useMemo(() => rankByUrgency(usask.resources)[0], [])
+  const topAwardDeadlineText = useMemo(() => {
+    if (!topAward) return undefined
+    const days = daysUntil(topAward, today)
+    return days !== null ? formatCountdown(days) : topAward.deadline
+  }, [topAward, today])
+  const callContext: CallContext = useMemo(
+    () => ({
+      specializationName: hero.spec.name,
+      coursesRemaining: hero.remaining,
+      awardName: topAward?.name,
+      awardDeadlineText: topAwardDeadlineText,
+    }),
+    [hero, topAward, topAwardDeadlineText],
+  )
+  const callFallbackScript = useMemo(() => buildCallScript(callContext), [callContext])
+
+  const [phone, setPhone] = useState('')
+  const [callStatus, setCallStatus] = useState<'idle' | 'calling' | 'success' | 'error'>('idle')
+
+  async function handleCallMe(e: FormEvent) {
+    e.preventDefault()
+    setCallStatus('calling')
+    try {
+      const res = await fetch('/api/call-me', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ phoneNumber: phone, context: callContext }),
+      })
+      if (!res.ok) throw new Error('call failed')
+      setCallStatus('success')
+    } catch {
+      setCallStatus('error')
+    }
+  }
+
   return (
     <div className="page">
       <header className="nav">
@@ -269,8 +308,8 @@ function App() {
               ))}
             </ul>
           )}
-          <button type="button" className="btn" onClick={resetToTranscript}>
-            Reset to transcript
+          <button type="button" className="btn" onClick={loadSampleStudent}>
+            Load sample student
           </button>
         </section>
 
@@ -424,6 +463,36 @@ function App() {
                 </>
               )}
             </div>
+          )}
+        </section>
+
+        <section className="section call">
+          <h2 className="section__title">Get a call about this</h2>
+          <p className="hint">
+            One scripted call about your #1 specialization{topAward ? ' and your most urgent award' : ''} — no
+            conversation, just the reminder, then it hangs up.
+          </p>
+          <form className="call__form" onSubmit={handleCallMe}>
+            <input
+              type="tel"
+              className="call__input"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+1 555 555 5555"
+              aria-label="Your phone number"
+              required
+            />
+            <button type="submit" className="btn" disabled={callStatus === 'calling'}>
+              📞 Call me about this
+            </button>
+          </form>
+          {callStatus === 'calling' && <p className="hint">Calling…</p>}
+          {callStatus === 'success' && <p className="call__success">Call placed — it should ring shortly.</p>}
+          {callStatus === 'error' && (
+            <p className="call__fallback">
+              Call couldn&rsquo;t connect — here&rsquo;s your reminder on screen instead: &ldquo;{callFallbackScript}
+              &rdquo;
+            </p>
           )}
         </section>
       </main>
