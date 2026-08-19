@@ -1,4 +1,5 @@
 import type { School } from './types.ts'
+import { programs } from '../programs/index.ts'
 
 // Real, verified USask scholarships and resources only — never invented or placeholder entries.
 //
@@ -12,6 +13,7 @@ export const usask: School = {
   id: 'usask',
   name: 'University of Saskatchewan',
   aliases: ['usask', 'u of s', 'university of saskatchewan'],
+  programs,
   resources: [
     // --- University-wide (open to any continuing undergrad, not CS-specific) ---
     {

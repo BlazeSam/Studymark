@@ -1,4 +1,4 @@
-import { specializations, type Specialization } from '../data/specializations.ts'
+import type { Specialization } from '../data/specializations.ts'
 
 export interface UnsatisfiedGroup {
   /** Courses in this slot the student hasn't completed yet (any one/N of them would count). */
@@ -35,7 +35,7 @@ function matchOne(spec: Specialization, completed: Set<string>): SpecializationM
 }
 
 /** Ranks all specializations by fewest remaining courses first. */
-export function computeMatches(completed: Set<string>): SpecializationMatch[] {
+export function computeMatches(specializations: Specialization[], completed: Set<string>): SpecializationMatch[] {
   return specializations
     .map((spec) => matchOne(spec, completed))
     .sort((a, b) => a.remaining - b.remaining || a.spec.name.localeCompare(b.spec.name))
@@ -52,7 +52,7 @@ export interface CourseOverlap {
  * (i.e. it sits in a requirement group that isn't already satisfied another way).
  * Ranked highest-overlap first.
  */
-export function computeCourseOverlap(completed: Set<string>): CourseOverlap[] {
+export function computeCourseOverlap(specializations: Specialization[], completed: Set<string>): CourseOverlap[] {
   const bySpec = new Map<string, Set<Specialization>>()
 
   for (const spec of specializations) {

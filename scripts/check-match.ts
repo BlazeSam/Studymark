@@ -2,9 +2,10 @@
 import assert from 'node:assert/strict'
 import { computeMatches, computeCourseOverlap } from '../src/lib/match.ts'
 import { completedCourses } from '../src/data/transcript.ts'
+import { specializations } from '../src/data/specializations.ts'
 
 const completed = new Set(completedCourses)
-const matches = computeMatches(completed)
+const matches = computeMatches(specializations, completed)
 
 assert.equal(matches[0].spec.id, 'social-computing', 'closest specialization should be Social Computing')
 assert.equal(matches[0].remaining, 1, 'Social Computing should need exactly 1 more course')
@@ -18,7 +19,7 @@ assert.ok(
   'results must be sorted ascending by remaining count',
 )
 
-const overlap = computeCourseOverlap(completed)
+const overlap = computeCourseOverlap(specializations, completed)
 assert.equal(overlap[0].course, 'CMPT384', 'CMPT384 should be the highest-overlap uncompleted course')
 assert.equal(overlap[0].specs.length, 3, 'CMPT384 should advance exactly 3 specializations')
 assert.deepEqual(
@@ -34,5 +35,9 @@ assert.ok(
   overlap.every((o) => !completed.has(o.course)),
   'overlap must never include an already-completed course',
 )
+
+// programs with no data yet (Math/Stats/Biology stubs) must degrade to empty, never throw
+assert.deepEqual(computeMatches([], completed), [], 'empty specializations list yields empty matches')
+assert.deepEqual(computeCourseOverlap([], completed), [], 'empty specializations list yields empty overlap')
 
 console.log('match.check.ts: all assertions passed')

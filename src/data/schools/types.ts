@@ -1,3 +1,5 @@
+import type { Program } from '../programs/types.ts'
+
 export interface Resource {
   id: string
   name: string
@@ -18,4 +20,6 @@ export interface School {
   aliases: string[]
   /** Real, verified resources for this school only — never invented or placeholder entries. */
   resources: Resource[]
+  /** Programs offered at this school with intake-driven course/specialization data. */
+  programs?: Program[]
 }

@@ -1,0 +1,12 @@
+import { specializations } from '../specializations.ts'
+import { courseTitles } from '../courseTitles.ts'
+import { completedCourses } from '../transcript.ts'
+import type { Program } from './types.ts'
+
+export const computerScience: Program = {
+  id: 'computer-science',
+  name: 'Computer Science',
+  specializations,
+  courseTitles,
+  sampleTranscript: completedCourses,
+}

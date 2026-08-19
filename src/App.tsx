@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react'
-import { computeMatches, computeCourseOverlap } from './lib/match.ts'
+import { computeMatches, computeCourseOverlap, type SpecializationMatch } from './lib/match.ts'
 import { rankByUrgency, daysUntil, urgencyTier, formatCountdown } from './lib/resources.ts'
 import type { GuidanceResult } from './lib/scholarshipAi.ts'
-import { completedCourses } from './data/transcript.ts'
-import { courseTitles } from './data/courseTitles.ts'
+import type { Specialization } from './data/specializations.ts'
 import { findSchool } from './data/schools/index.ts'
 import { usask } from './data/schools/usask.ts'
 import type { School } from './data/schools/types.ts'
+import { computerScience } from './data/programs/computerScience.ts'
+import type { Program } from './data/programs/types.ts'
 import { buildCallScript, type CallContext } from './lib/callScript.ts'
 import './App.css'
 
@@ -14,11 +15,21 @@ type Lookup =
   | { kind: 'verified'; school: School; whyYou: Record<string, string>; loadingWhy: boolean }
   | { kind: 'guidance'; schoolName: string; program: string; loading: boolean; result: GuidanceResult | null; error: string | null }
 
+type UniversityChoice = '' | 'usask' | 'other'
+
 const WHY_IT_MATTERS =
   'Specializations appear on your official transcript and signal focused expertise to employers — beyond the base CS degree.'
 
 const ACCENTS = ['pear', 'cyan', 'mint'] as const
-const PROGRAM = 'Computer Science'
+
+// Selected when the student picks "Other university" — no course-matching data exists for it,
+// so it routes straight to the AI-guidance fallback in the resources section.
+const OTHER_PROGRAM: Program = { id: 'other', name: 'your program', specializations: [], courseTitles: {} }
+
+// Safe fallback so hero/resources/call never crash when there's no program data yet — never rendered
+// as the actual reveal (hero/insight/feed are gated off in that case), only keeps other sections safe.
+const EMPTY_SPEC: Specialization = { id: 'none', name: 'your program', requirements: [] }
+const EMPTY_MATCH: SpecializationMatch = { spec: EMPTY_SPEC, totalRequired: 0, doneCount: 0, remaining: 0, unsatisfied: [] }
 
 function formatDate(date: Date) {
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
@@ -26,12 +37,6 @@ function formatDate(date: Date) {
 
 function courseCode(code: string) {
   return code.replace(/([A-Z]+)(\d+)/, '$1 $2')
-}
-
-function courseLabel(code: string) {
-  const title = courseTitles[code]
-  const display = courseCode(code)
-  return title ? `${display} — ${title}` : display
 }
 
 function ProgressBar({ done, total }: { done: number; total: number }) {
@@ -44,13 +49,13 @@ function ProgressBar({ done, total }: { done: number; total: number }) {
   )
 }
 
-function CourseCheck({ code, checked, onToggle }: { code: string; checked: boolean; onToggle: () => void }) {
+function CourseCheck({ label, checked, onToggle }: { label: string; checked: boolean; onToggle: () => void }) {
   return (
     <li>
       <label className="check">
         <input type="checkbox" checked={checked} onChange={onToggle} />
         <span className="check__box" aria-hidden />
-        <span className="check__label">{courseLabel(code)}</span>
+        <span className="check__label">{label}</span>
       </label>
     </li>
   )
@@ -89,17 +94,40 @@ function useTickUp(target: number) {
 }
 
 function App() {
+  // --- intake: university → program → courses → phone ---
+  const [universityId, setUniversityId] = useState<UniversityChoice>('')
+  const [programId, setProgramId] = useState('')
+  const [revealed, setRevealed] = useState(false)
+
+  const selectedSchool = universityId === 'usask' ? usask : null
+  const availablePrograms = selectedSchool?.programs ?? []
+  const selectedProgram: Program | null =
+    universityId === 'usask'
+      ? (availablePrograms.find((p) => p.id === programId) ?? null)
+      : universityId === 'other'
+        ? OTHER_PROGRAM
+        : null
+
+  function courseLabel(code: string) {
+    const title = selectedProgram?.courseTitles[code]
+    const display = courseCode(code)
+    return title ? `${display} — ${title}` : display
+  }
+
   const [completed, setCompleted] = useState<Set<string>>(() => new Set())
   const completedRef = useRef(completed)
   completedRef.current = completed
-  const matches = useMemo(() => computeMatches(completed), [completed])
+  const matches = useMemo(
+    () => computeMatches(selectedProgram?.specializations ?? [], completed),
+    [selectedProgram, completed],
+  )
 
   const [heroId, setHeroId] = useState<string | null>(null)
   useEffect(() => {
     if (heroId === null && matches.length > 0) setHeroId(matches[0].spec.id)
   }, [heroId, matches])
 
-  const hero = matches.find((m) => m.spec.id === heroId) ?? matches[0]
+  const hero = matches.find((m) => m.spec.id === heroId) ?? matches[0] ?? EMPTY_MATCH
   const rest = matches.filter((m) => m.spec.id !== hero.spec.id)
   const tickValue = useTickUp(hero.remaining)
 
@@ -113,7 +141,7 @@ function App() {
       // hold the celebratory "done" state, then promote the next-closest specialization —
       // recomputed fresh from live data in case the student kept toggling during the hold.
       const promoteId = setTimeout(() => {
-        const freshMatches = computeMatches(completedRef.current)
+        const freshMatches = computeMatches(selectedProgram?.specializations ?? [], completedRef.current)
         const next = freshMatches
           .filter((m) => m.spec.id !== doneHeroId && m.remaining > 0)
           .sort((a, b) => a.remaining - b.remaining || a.spec.name.localeCompare(b.spec.name))[0]
@@ -125,16 +153,16 @@ function App() {
       }
     }
     prevRemaining.current = hero.remaining
-  }, [hero.spec.id, hero.remaining])
+  }, [hero.spec.id, hero.remaining, selectedProgram])
 
   const topOverlap = useMemo(() => {
-    const overlap = computeCourseOverlap(completed)
+    const overlap = computeCourseOverlap(selectedProgram?.specializations ?? [], completed)
     return overlap[0] && overlap[0].specs.length >= 2 ? overlap[0] : null
-  }, [completed])
+  }, [selectedProgram, completed])
 
   const closenessRange = useMemo(() => {
     const remainings = rest.map((m) => m.remaining)
-    return { min: Math.min(...remainings), max: Math.max(...remainings) }
+    return remainings.length > 0 ? { min: Math.min(...remainings), max: Math.max(...remainings) } : { min: 0, max: 0 }
   }, [rest])
 
   const allRequirementCourses = useMemo(() => {
@@ -161,9 +189,25 @@ function App() {
     })
   }
 
-  function loadSampleStudent() {
-    setCompleted(new Set(completedCourses))
+  function handleUniversityChange(id: string) {
+    setUniversityId(id as UniversityChoice)
+    setProgramId('')
+    setCompleted(new Set())
     setHeroId(null)
+  }
+
+  function handleProgramChange(id: string) {
+    setProgramId(id)
+    setCompleted(new Set())
+    setHeroId(null)
+  }
+
+  function loadSampleStudent() {
+    setUniversityId('usask')
+    setProgramId(computerScience.id)
+    setCompleted(new Set(computerScience.sampleTranscript ?? []))
+    setHeroId(null)
+    setRevealed(true)
   }
 
   const today = useMemo(() => new Date(), [])
@@ -196,7 +240,7 @@ function App() {
             body: JSON.stringify({
               context: {
                 school: matched.name,
-                program: PROGRAM,
+                program: selectedProgram?.name ?? 'their program',
                 closestSpecialization: hero.spec.name,
                 coursesRemaining: hero.remaining,
                 topOverlapCourse: topOverlap?.course,
@@ -273,6 +317,8 @@ function App() {
     }
   }
 
+  const hasProgramData = (selectedProgram?.specializations.length ?? 0) > 0
+
   return (
     <div className="page">
       <header className="nav">
@@ -283,218 +329,314 @@ function App() {
       </header>
 
       <main>
-        <section className="hero section section--band" data-band="pear">
-          <div className="hero__statement">
-            <div className="hero__figure tnum" style={{ position: 'relative' }}>
-              {tickValue}
-              {burst && <span className="star-burst" aria-hidden />}
-            </div>
-            <div className="hero__statement-text">
-              <h1 className="hero__headline">
-                {hero.remaining === 0
-                  ? `${hero.spec.name} — done. It'll show on your transcript.`
-                  : `course${hero.remaining === 1 ? '' : 's'} from the ${hero.spec.name} specialization.`}
-              </h1>
-              <p className="hero__why">{WHY_IT_MATTERS}</p>
-            </div>
-          </div>
-          <div className="hero__bar">
-            <ProgressBar done={hero.doneCount} total={hero.totalRequired} />
-          </div>
-          {hero.remaining > 0 && (
-            <ul className="hero__remaining">
-              {hero.unsatisfied.map((g, i) => (
-                <li key={i}>{g.options.map(courseLabel).join(' or ')}</li>
-              ))}
-            </ul>
-          )}
-          <button type="button" className="btn" onClick={loadSampleStudent}>
-            Load sample student
+        <section className="section intake">
+          <h2 className="section__title">Tell us about you</h2>
+          <p className="hint">Blank by default — or skip straight to an instant demo.</p>
+          <button type="button" className="btn intake__sample" onClick={loadSampleStudent}>
+            ⚡ Load sample student (USask CS)
           </button>
-        </section>
 
-        {topOverlap && (
-          <section className="insight">
-            <p className="insight__text">
-              <strong>{courseCode(topOverlap.course)}</strong> counts toward{' '}
-              <strong>{topOverlap.specs.length} specializations</strong> — more than any other course you haven&rsquo;t
-              taken.
-            </p>
-            <div className="chips">
-              {topOverlap.specs.map((s) => (
-                <span key={s.id} className="chip">
-                  {s.name}
-                </span>
-              ))}
+          <div className="intake__field">
+            <label className="intake__label" htmlFor="intake-university">
+              1. University
+            </label>
+            <select
+              id="intake-university"
+              className="resources__input"
+              value={universityId}
+              onChange={(e) => handleUniversityChange(e.target.value)}
+            >
+              <option value="">Select your university</option>
+              <option value="usask">University of Saskatchewan</option>
+              <option value="other">Other university</option>
+            </select>
+          </div>
+
+          {universityId === 'usask' && (
+            <div className="intake__field">
+              <label className="intake__label" htmlFor="intake-program">
+                2. Program
+              </label>
+              <select
+                id="intake-program"
+                className="resources__input"
+                value={programId}
+                onChange={(e) => handleProgramChange(e.target.value)}
+              >
+                <option value="">Select your program</option>
+                {availablePrograms.map((p) => (
+                  <option key={p.id} value={p.id} disabled={p.specializations.length === 0}>
+                    {p.name}
+                    {p.specializations.length === 0 ? ' (coming soon)' : ''}
+                  </option>
+                ))}
+              </select>
             </div>
-          </section>
-        )}
+          )}
 
-        <section className="section">
-          <h2 className="section__title">Ranked by fewest courses remaining</h2>
-          <ol className="feed">
-            {rest.map((m, i) => {
-              const { min, max } = closenessRange
-              const closeness = max === min ? 0.5 : 1 - (m.remaining - min) / (max - min)
-              return (
-                <li
-                  key={m.spec.id}
-                  className={`feed__row feed__row--${ACCENTS[i % ACCENTS.length]}`}
-                  style={{ '--closeness': closeness } as CSSProperties}
-                >
-                  <div className="feed__head">
-                    <span className="feed__name">{m.spec.name}</span>
-                    <span className="feed__progress">
-                      {m.doneCount}/{m.totalRequired}
-                    </span>
-                  </div>
-                  <ProgressBar done={m.doneCount} total={m.totalRequired} />
-                  {m.remaining > 0 && (
-                    <ul className="feed__missing">
-                      {m.unsatisfied.map((g, i2) => (
-                        <li key={i2}>{g.options.map(courseLabel).join(' or ')}</li>
-                      ))}
-                    </ul>
-                  )}
-                </li>
-              )
-            })}
-          </ol>
+          {universityId === 'other' && (
+            <p className="hint">
+              We don&rsquo;t have course-matching data for this school yet — you can still get AI-guided scholarship
+              direction after revealing.
+            </p>
+          )}
         </section>
 
         <section className="checklist-section section section--band" data-band="cyan">
-          <h2 className="section__title">Courses taken</h2>
-          <p className="hint">Toggle courses to explore how the ranking changes.</p>
-          <ul className="checklist">
-            {notTakenCourses.map((code) => (
-              <CourseCheck key={code} code={code} checked={false} onToggle={() => toggleCourse(code)} />
-            ))}
-          </ul>
-          {takenCourses.length > 0 && (
-            <details className="checklist__taken">
-              <summary>
-                ✓ {takenCourses.length} course{takenCourses.length === 1 ? '' : 's'} taken
-              </summary>
+          <h2 className="section__title">3. Courses taken</h2>
+          {!selectedProgram ? (
+            <p className="hint">Pick your university and program above to see its course list.</p>
+          ) : !hasProgramData ? (
+            <p className="hint">No course data yet for {selectedProgram.name} — check back soon.</p>
+          ) : (
+            <>
+              <p className="hint">Toggle courses to explore how the ranking changes.</p>
               <ul className="checklist">
-                {takenCourses.map((code) => (
-                  <CourseCheck key={code} code={code} checked onToggle={() => toggleCourse(code)} />
+                {notTakenCourses.map((code) => (
+                  <CourseCheck key={code} label={courseLabel(code)} checked={false} onToggle={() => toggleCourse(code)} />
                 ))}
               </ul>
-            </details>
-          )}
-        </section>
-
-        <section className="section section--band resources" data-band="mint">
-          <h2 className="section__title">Hidden resources &amp; scholarships</h2>
-          <p className="hint">
-            The stuff your school buries a few clicks too deep. Works for any school — verified awards where we&rsquo;ve
-            mapped it, AI-guided categories everywhere else.
-          </p>
-          <p className="resources__today">Today: {formatDate(today)}</p>
-          <form className="resources__lookup" onSubmit={handleFindResources}>
-            <input
-              className="resources__input"
-              value={schoolQuery}
-              onChange={(e) => setSchoolQuery(e.target.value)}
-              placeholder="Your school"
-              aria-label="Your school"
-            />
-            <input
-              className="resources__input"
-              value={programQuery}
-              onChange={(e) => setProgramQuery(e.target.value)}
-              placeholder="Your program (optional)"
-              aria-label="Your program"
-            />
-            <button type="submit" className="btn">
-              Find resources
-            </button>
-          </form>
-
-          {lookup?.kind === 'verified' &&
-            (lookup.school.resources.length === 0 ? (
-              <p className="resources__empty">
-                Waiting on the verified source list for {lookup.school.name} — nothing invented here.
-              </p>
-            ) : (
-              <ol className="resources__list">
-                {rankByUrgency(lookup.school.resources).map((r) => {
-                  const days = daysUntil(r, today)
-                  const tier = urgencyTier(days)
-                  const countdown = formatCountdown(days)
-                  const why = lookup.whyYou[r.id]
-                  return (
-                    <li key={r.id} className={`resource-card resource-card--${tier}`}>
-                      <p className="resource-card__countdown">{days !== null ? countdown : r.deadline}</p>
-                      <h3 className="resource-card__name">{r.name}</h3>
-                      {r.value && <p className="resource-card__value">{r.value}</p>}
-                      <p className="resource-card__what">{r.whatItIs}</p>
-                      <p className="resource-card__why">{r.whyRelevant}</p>
-                      {lookup.loadingWhy && <p className="resource-card__why-you resource-card__why-you--loading">Personalizing…</p>}
-                      {why && <p className="resource-card__why-you">{why}</p>}
-                    </li>
-                  )
-                })}
-              </ol>
-            ))}
-
-          {lookup?.kind === 'guidance' && (
-            <div className="guidance-card">
-              <p className="guidance-card__label">
-                {lookup.schoolName} isn&rsquo;t in our verified list yet — here&rsquo;s AI-guided direction, not specific
-                named awards.
-              </p>
-              {lookup.loading && <p className="hint">Asking…</p>}
-              {lookup.error && <p className="resources__empty">{lookup.error}</p>}
-              {lookup.result && (
-                <>
-                  <div className="chips">
-                    {lookup.result.categories.map((c) => (
-                      <span key={c} className="chip">
-                        {c}
-                      </span>
-                    ))}
-                  </div>
-                  <ul className="guidance-card__where">
-                    {lookup.result.whereToLook.map((w) => (
-                      <li key={w}>{w}</li>
+              {takenCourses.length > 0 && (
+                <details className="checklist__taken">
+                  <summary>
+                    ✓ {takenCourses.length} course{takenCourses.length === 1 ? '' : 's'} taken
+                  </summary>
+                  <ul className="checklist">
+                    {takenCourses.map((code) => (
+                      <CourseCheck key={code} label={courseLabel(code)} checked onToggle={() => toggleCourse(code)} />
                     ))}
                   </ul>
-                </>
+                </details>
               )}
-            </div>
+            </>
           )}
         </section>
 
-        <section className="section call">
-          <h2 className="section__title">Get a call about this</h2>
-          <p className="hint">
-            One scripted call about your #1 specialization{topAward ? ' and your most urgent award' : ''} — no
-            conversation, just the reminder, then it hangs up.
-          </p>
-          <form className="call__form" onSubmit={handleCallMe}>
+        <section className="section intake">
+          <div className="intake__field">
+            <label className="intake__label" htmlFor="intake-phone">
+              4. Phone number <span className="intake__optional">(optional, for call reminders)</span>
+            </label>
             <input
+              id="intake-phone"
               type="tel"
-              className="call__input"
+              className="resources__input"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="+1 555 555 5555"
-              aria-label="Your phone number"
-              required
             />
-            <button type="submit" className="btn" disabled={callStatus === 'calling'}>
-              📞 Call me about this
-            </button>
-          </form>
-          {callStatus === 'calling' && <p className="hint">Calling…</p>}
-          {callStatus === 'success' && <p className="call__success">Call placed — it should ring shortly.</p>}
-          {callStatus === 'error' && (
-            <p className="call__fallback">
-              Call couldn&rsquo;t connect — here&rsquo;s your reminder on screen instead: &ldquo;{callFallbackScript}
-              &rdquo;
-            </p>
-          )}
+          </div>
+          <button type="button" className="btn" disabled={!selectedProgram} onClick={() => setRevealed(true)}>
+            Reveal what my school hides
+          </button>
         </section>
+
+        {revealed && selectedProgram && (
+          <>
+            {hasProgramData ? (
+              <>
+                <section className="hero section section--band" data-band="pear">
+                  <div className="hero__statement">
+                    <div className="hero__figure tnum" style={{ position: 'relative' }}>
+                      {tickValue}
+                      {burst && <span className="star-burst" aria-hidden />}
+                    </div>
+                    <div className="hero__statement-text">
+                      <h1 className="hero__headline">
+                        {hero.remaining === 0
+                          ? `${hero.spec.name} — done. It'll show on your transcript.`
+                          : `course${hero.remaining === 1 ? '' : 's'} from the ${hero.spec.name} specialization.`}
+                      </h1>
+                      <p className="hero__why">{WHY_IT_MATTERS}</p>
+                    </div>
+                  </div>
+                  <div className="hero__bar">
+                    <ProgressBar done={hero.doneCount} total={hero.totalRequired} />
+                  </div>
+                  {hero.remaining > 0 && (
+                    <ul className="hero__remaining">
+                      {hero.unsatisfied.map((g, i) => (
+                        <li key={i}>{g.options.map(courseLabel).join(' or ')}</li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+
+                {topOverlap && (
+                  <section className="insight">
+                    <p className="insight__text">
+                      <strong>{courseCode(topOverlap.course)}</strong> counts toward{' '}
+                      <strong>{topOverlap.specs.length} specializations</strong> — more than any other course you
+                      haven&rsquo;t taken.
+                    </p>
+                    <div className="chips">
+                      {topOverlap.specs.map((s) => (
+                        <span key={s.id} className="chip">
+                          {s.name}
+                        </span>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                <section className="section">
+                  <h2 className="section__title">Ranked by fewest courses remaining</h2>
+                  <ol className="feed">
+                    {rest.map((m, i) => {
+                      const { min, max } = closenessRange
+                      const closeness = max === min ? 0.5 : 1 - (m.remaining - min) / (max - min)
+                      return (
+                        <li
+                          key={m.spec.id}
+                          className={`feed__row feed__row--${ACCENTS[i % ACCENTS.length]}`}
+                          style={{ '--closeness': closeness } as CSSProperties}
+                        >
+                          <div className="feed__head">
+                            <span className="feed__name">{m.spec.name}</span>
+                            <span className="feed__progress">
+                              {m.doneCount}/{m.totalRequired}
+                            </span>
+                          </div>
+                          <ProgressBar done={m.doneCount} total={m.totalRequired} />
+                          {m.remaining > 0 && (
+                            <ul className="feed__missing">
+                              {m.unsatisfied.map((g, i2) => (
+                                <li key={i2}>{g.options.map(courseLabel).join(' or ')}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </li>
+                      )
+                    })}
+                  </ol>
+                </section>
+              </>
+            ) : (
+              <section className="section">
+                <p className="hint">
+                  No course-matching data yet for {selectedProgram.name} — but you can still look up scholarship
+                  guidance below.
+                </p>
+              </section>
+            )}
+
+            <section className="section section--band resources" data-band="mint">
+              <h2 className="section__title">Hidden resources &amp; scholarships</h2>
+              <p className="hint">
+                The stuff your school buries a few clicks too deep. Works for any school — verified awards where
+                we&rsquo;ve mapped it, AI-guided categories everywhere else.
+              </p>
+              <p className="resources__today">Today: {formatDate(today)}</p>
+              <form className="resources__lookup" onSubmit={handleFindResources}>
+                <input
+                  className="resources__input"
+                  value={schoolQuery}
+                  onChange={(e) => setSchoolQuery(e.target.value)}
+                  placeholder="Your school"
+                  aria-label="Your school"
+                />
+                <input
+                  className="resources__input"
+                  value={programQuery}
+                  onChange={(e) => setProgramQuery(e.target.value)}
+                  placeholder="Your program (optional)"
+                  aria-label="Your program"
+                />
+                <button type="submit" className="btn">
+                  Find resources
+                </button>
+              </form>
+
+              {lookup?.kind === 'verified' &&
+                (lookup.school.resources.length === 0 ? (
+                  <p className="resources__empty">
+                    Waiting on the verified source list for {lookup.school.name} — nothing invented here.
+                  </p>
+                ) : (
+                  <ol className="resources__list">
+                    {rankByUrgency(lookup.school.resources).map((r) => {
+                      const days = daysUntil(r, today)
+                      const tier = urgencyTier(days)
+                      const countdown = formatCountdown(days)
+                      const why = lookup.whyYou[r.id]
+                      return (
+                        <li key={r.id} className={`resource-card resource-card--${tier}`}>
+                          <p className="resource-card__countdown">{days !== null ? countdown : r.deadline}</p>
+                          <h3 className="resource-card__name">{r.name}</h3>
+                          {r.value && <p className="resource-card__value">{r.value}</p>}
+                          <p className="resource-card__what">{r.whatItIs}</p>
+                          <p className="resource-card__why">{r.whyRelevant}</p>
+                          {lookup.loadingWhy && (
+                            <p className="resource-card__why-you resource-card__why-you--loading">Personalizing…</p>
+                          )}
+                          {why && <p className="resource-card__why-you">{why}</p>}
+                        </li>
+                      )
+                    })}
+                  </ol>
+                ))}
+
+              {lookup?.kind === 'guidance' && (
+                <div className="guidance-card">
+                  <p className="guidance-card__label">
+                    {lookup.schoolName} isn&rsquo;t in our verified list yet — here&rsquo;s AI-guided direction, not
+                    specific named awards.
+                  </p>
+                  {lookup.loading && <p className="hint">Asking…</p>}
+                  {lookup.error && <p className="resources__empty">{lookup.error}</p>}
+                  {lookup.result && (
+                    <>
+                      <div className="chips">
+                        {lookup.result.categories.map((c) => (
+                          <span key={c} className="chip">
+                            {c}
+                          </span>
+                        ))}
+                      </div>
+                      <ul className="guidance-card__where">
+                        {lookup.result.whereToLook.map((w) => (
+                          <li key={w}>{w}</li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </div>
+              )}
+            </section>
+
+            {hasProgramData && (
+              <section className="section call">
+                <h2 className="section__title">Get a call about this</h2>
+                <p className="hint">
+                  One scripted call about your #1 specialization{topAward ? ' and your most urgent award' : ''} — no
+                  conversation, just the reminder, then it hangs up.
+                </p>
+                <form className="call__form" onSubmit={handleCallMe}>
+                  <input
+                    type="tel"
+                    className="call__input"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="+1 555 555 5555"
+                    aria-label="Your phone number"
+                    required
+                  />
+                  <button type="submit" className="btn" disabled={callStatus === 'calling'}>
+                    📞 Call me about this
+                  </button>
+                </form>
+                {callStatus === 'calling' && <p className="hint">Calling…</p>}
+                {callStatus === 'success' && <p className="call__success">Call placed — it should ring shortly.</p>}
+                {callStatus === 'error' && (
+                  <p className="call__fallback">
+                    Call couldn&rsquo;t connect — here&rsquo;s your reminder on screen instead: &ldquo;
+                    {callFallbackScript}&rdquo;
+                  </p>
+                )}
+              </section>
+            )}
+          </>
+        )}
       </main>
 
       <footer className="footer">
