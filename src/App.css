@@ -73,6 +73,10 @@
   background: color-mix(in oklch, var(--color-mint) 10%, var(--color-paper));
 }
 
+.section--band[data-band='lavender'] {
+  background: color-mix(in oklch, var(--color-lavender) 14%, var(--color-paper));
+}
+
 .section__title {
   font-size: var(--text-xl);
   margin-bottom: var(--space-2xs);
@@ -706,11 +710,13 @@
   .check__box,
   .check__box::after,
   .btn,
-  .resource-card {
+  .resource-card,
+  .upload-dropzone {
     transition-duration: 1ms;
   }
   .feed__row:hover,
-  .resource-card:hover {
+  .resource-card:hover,
+  .upload-dropzone:hover {
     transform: none;
   }
   .star-burst {
@@ -757,20 +763,12 @@
 
 /* ---------- intake (university → program → courses → phone) ---------- */
 
+.intake + .intake {
+  margin-top: var(--space-lg);
+}
+
 .intake__sample {
   margin: var(--space-sm) 0 var(--space-lg);
-}
-
-.intake__field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2xs);
-  margin-bottom: var(--space-md);
-}
-
-.intake__label {
-  font-weight: 600;
-  font-size: var(--text-sm);
 }
 
 .intake__optional {
@@ -778,8 +776,128 @@
   color: var(--color-ink-2);
 }
 
+.intake__reveal {
+  margin-top: var(--space-md);
+}
+
 select.resources__input {
   cursor: pointer;
+}
+
+/* numbered step rows — badge + field, so each step reads as clearly present */
+
+.step {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+.step:last-child {
+  margin-bottom: 0;
+}
+
+.step__badge {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--text-sm);
+  display: grid;
+  place-items: center;
+  margin-top: 2px;
+}
+
+.step__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.step__label {
+  display: block;
+  font-weight: 600;
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-2xs);
+}
+
+.step select.resources__input,
+.step input.resources__input {
+  max-width: 26rem;
+}
+
+/* transcript upload — the primary, magic entry point */
+
+.upload-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-2xs);
+  padding: var(--space-xl) var(--space-lg);
+  border: 2px dashed var(--color-accent-2-deep);
+  border-radius: var(--radius-card);
+  background: color-mix(in oklch, var(--color-accent-2) 8%, var(--color-paper));
+  cursor: pointer;
+  transition:
+    background var(--dur-med) var(--ease-out),
+    transform var(--dur-med) var(--ease-spring);
+}
+
+.upload-dropzone:hover {
+  background: color-mix(in oklch, var(--color-accent-2) 14%, var(--color-paper));
+  transform: translateY(-2px);
+}
+
+.upload-dropzone:has(.upload-dropzone__input:focus-visible) {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.upload-dropzone__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.upload-dropzone__icon {
+  font-size: var(--text-2xl);
+}
+
+.upload-dropzone__title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--text-md);
+}
+
+.upload-dropzone__hint {
+  font-size: var(--text-sm);
+  color: var(--color-ink-2);
+}
+
+.upload-status {
+  margin-top: var(--space-sm);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.upload-status--success {
+  color: color-mix(in oklch, var(--color-mint) 60%, var(--color-ink) 40%);
+}
+
+.upload-status--error {
+  color: var(--color-ink-2);
+  font-weight: 400;
+  font-style: italic;
+}
+
+.intake__manual {
+  margin-top: var(--space-lg);
 }
 
 /* ---------- responsive ---------- */

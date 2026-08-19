@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type FormEvent } from 'react'
 import { computeMatches, computeCourseOverlap, type SpecializationMatch } from './lib/match.ts'
 import { rankByUrgency, daysUntil, urgencyTier, formatCountdown } from './lib/resources.ts'
 import type { GuidanceResult } from './lib/scholarshipAi.ts'
@@ -10,6 +10,15 @@ import { computerScience } from './data/programs/computerScience.ts'
 import type { Program } from './data/programs/types.ts'
 import { buildCallScript, type CallContext } from './lib/callScript.ts'
 import './App.css'
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve((reader.result as string).split(',')[1] ?? '')
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
 
 type Lookup =
   | { kind: 'verified'; school: School; whyYou: Record<string, string>; loadingWhy: boolean }
@@ -194,12 +203,14 @@ function App() {
     setProgramId('')
     setCompleted(new Set())
     setHeroId(null)
+    setUploadStatus('idle')
   }
 
   function handleProgramChange(id: string) {
     setProgramId(id)
     setCompleted(new Set())
     setHeroId(null)
+    setUploadStatus('idle')
   }
 
   function loadSampleStudent() {
@@ -207,7 +218,39 @@ function App() {
     setProgramId(computerScience.id)
     setCompleted(new Set(computerScience.sampleTranscript ?? []))
     setHeroId(null)
+    setUploadStatus('idle')
     setRevealed(true)
+  }
+
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle')
+  const [uploadError, setUploadError] = useState<string | null>(null)
+
+  async function handleTranscriptUpload(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // allow re-uploading the same filename later
+    if (!file || !selectedProgram) return
+
+    setUploadStatus('uploading')
+    setUploadError(null)
+    try {
+      const pdfBase64 = await fileToBase64(file)
+      const knownCourseCodes = Object.keys(selectedProgram.courseTitles)
+      const res = await fetch('/api/parse-transcript', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ pdfBase64, knownCourseCodes }),
+      })
+      if (!res.ok) throw new Error('parse failed')
+      const data = await res.json()
+      const codes: string[] = data.completedCourses ?? []
+      if (codes.length === 0) throw new Error('nothing found')
+      setCompleted(new Set(codes))
+      setHeroId(null)
+      setUploadStatus('success')
+    } catch {
+      setUploadStatus('error')
+      setUploadError("Couldn't read that file automatically — enter your courses manually below instead.")
+    }
   }
 
   const today = useMemo(() => new Date(), [])
@@ -329,48 +372,58 @@ function App() {
       </header>
 
       <main>
-        <section className="section intake">
+        <section className="section section--band intake" data-band="pear">
           <h2 className="section__title">Tell us about you</h2>
           <p className="hint">Blank by default — or skip straight to an instant demo.</p>
           <button type="button" className="btn intake__sample" onClick={loadSampleStudent}>
             ⚡ Load sample student (USask CS)
           </button>
 
-          <div className="intake__field">
-            <label className="intake__label" htmlFor="intake-university">
-              1. University
-            </label>
-            <select
-              id="intake-university"
-              className="resources__input"
-              value={universityId}
-              onChange={(e) => handleUniversityChange(e.target.value)}
-            >
-              <option value="">Select your university</option>
-              <option value="usask">University of Saskatchewan</option>
-              <option value="other">Other university</option>
-            </select>
+          <div className="step">
+            <span className="step__badge" aria-hidden>
+              1
+            </span>
+            <div className="step__body">
+              <label className="step__label" htmlFor="intake-university">
+                University
+              </label>
+              <select
+                id="intake-university"
+                className="resources__input"
+                value={universityId}
+                onChange={(e) => handleUniversityChange(e.target.value)}
+              >
+                <option value="">Select your university</option>
+                <option value="usask">University of Saskatchewan</option>
+                <option value="other">Other university</option>
+              </select>
+            </div>
           </div>
 
           {universityId === 'usask' && (
-            <div className="intake__field">
-              <label className="intake__label" htmlFor="intake-program">
-                2. Program
-              </label>
-              <select
-                id="intake-program"
-                className="resources__input"
-                value={programId}
-                onChange={(e) => handleProgramChange(e.target.value)}
-              >
-                <option value="">Select your program</option>
-                {availablePrograms.map((p) => (
-                  <option key={p.id} value={p.id} disabled={p.specializations.length === 0}>
-                    {p.name}
-                    {p.specializations.length === 0 ? ' (coming soon)' : ''}
-                  </option>
-                ))}
-              </select>
+            <div className="step">
+              <span className="step__badge" aria-hidden>
+                2
+              </span>
+              <div className="step__body">
+                <label className="step__label" htmlFor="intake-program">
+                  Program
+                </label>
+                <select
+                  id="intake-program"
+                  className="resources__input"
+                  value={programId}
+                  onChange={(e) => handleProgramChange(e.target.value)}
+                >
+                  <option value="">Select your program</option>
+                  {availablePrograms.map((p) => (
+                    <option key={p.id} value={p.id} disabled={p.specializations.length === 0}>
+                      {p.name}
+                      {p.specializations.length === 0 ? ' (coming soon)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           )}
 
@@ -382,51 +435,93 @@ function App() {
           )}
         </section>
 
-        <section className="checklist-section section section--band" data-band="cyan">
-          <h2 className="section__title">3. Courses taken</h2>
-          {!selectedProgram ? (
-            <p className="hint">Pick your university and program above to see its course list.</p>
-          ) : !hasProgramData ? (
-            <p className="hint">No course data yet for {selectedProgram.name} — check back soon.</p>
-          ) : (
-            <>
-              <p className="hint">Toggle courses to explore how the ranking changes.</p>
-              <ul className="checklist">
-                {notTakenCourses.map((code) => (
-                  <CourseCheck key={code} label={courseLabel(code)} checked={false} onToggle={() => toggleCourse(code)} />
-                ))}
-              </ul>
-              {takenCourses.length > 0 && (
-                <details className="checklist__taken">
-                  <summary>
-                    ✓ {takenCourses.length} course{takenCourses.length === 1 ? '' : 's'} taken
-                  </summary>
-                  <ul className="checklist">
-                    {takenCourses.map((code) => (
-                      <CourseCheck key={code} label={courseLabel(code)} checked onToggle={() => toggleCourse(code)} />
-                    ))}
-                  </ul>
-                </details>
+        <section className="checklist-section section section--band intake" data-band="lavender">
+          <div className="step">
+            <span className="step__badge" aria-hidden>
+              3
+            </span>
+            <div className="step__body">
+              <label className="step__label">Courses taken</label>
+              {!selectedProgram ? (
+                <p className="hint">Pick your university and program above to see its course list.</p>
+              ) : !hasProgramData ? (
+                <p className="hint">No course data yet for {selectedProgram.name} — check back soon.</p>
+              ) : (
+                <>
+                  <label htmlFor="transcript-upload" className="upload-dropzone">
+                    <input
+                      id="transcript-upload"
+                      type="file"
+                      accept="application/pdf"
+                      className="upload-dropzone__input"
+                      onChange={handleTranscriptUpload}
+                    />
+                    <span className="upload-dropzone__icon" aria-hidden>
+                      📄
+                    </span>
+                    <span className="upload-dropzone__title">Upload your transcript and we&rsquo;ll read it for you</span>
+                    <span className="upload-dropzone__hint">PDF — DegreeWorks audit or unofficial transcript</span>
+                  </label>
+                  {uploadStatus === 'uploading' && <p className="hint">Reading your transcript…</p>}
+                  {uploadStatus === 'success' && (
+                    <p className="upload-status upload-status--success">
+                      ✓ Found {completed.size} completed course{completed.size === 1 ? '' : 's'} — review below.
+                    </p>
+                  )}
+                  {uploadStatus === 'error' && <p className="upload-status upload-status--error">{uploadError}</p>}
+
+                  <details className="intake__manual" open={uploadStatus === 'success' || uploadStatus === 'error'}>
+                    <summary>{takenCourses.length > 0 ? 'Review or edit detected courses' : 'Or enter manually'}</summary>
+                    <p className="hint">Toggle courses to explore how the ranking changes.</p>
+                    <ul className="checklist">
+                      {notTakenCourses.map((code) => (
+                        <CourseCheck
+                          key={code}
+                          label={courseLabel(code)}
+                          checked={false}
+                          onToggle={() => toggleCourse(code)}
+                        />
+                      ))}
+                    </ul>
+                    {takenCourses.length > 0 && (
+                      <details className="checklist__taken">
+                        <summary>
+                          ✓ {takenCourses.length} course{takenCourses.length === 1 ? '' : 's'} taken
+                        </summary>
+                        <ul className="checklist">
+                          {takenCourses.map((code) => (
+                            <CourseCheck key={code} label={courseLabel(code)} checked onToggle={() => toggleCourse(code)} />
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+                  </details>
+                </>
               )}
-            </>
-          )}
+            </div>
+          </div>
         </section>
 
-        <section className="section intake">
-          <div className="intake__field">
-            <label className="intake__label" htmlFor="intake-phone">
-              4. Phone number <span className="intake__optional">(optional, for call reminders)</span>
-            </label>
-            <input
-              id="intake-phone"
-              type="tel"
-              className="resources__input"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="+1 555 555 5555"
-            />
+        <section className="section section--band intake" data-band="cyan">
+          <div className="step">
+            <span className="step__badge" aria-hidden>
+              4
+            </span>
+            <div className="step__body">
+              <label className="step__label" htmlFor="intake-phone">
+                Phone number <span className="intake__optional">(optional, for call reminders)</span>
+              </label>
+              <input
+                id="intake-phone"
+                type="tel"
+                className="resources__input"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+1 555 555 5555"
+              />
+            </div>
           </div>
-          <button type="button" className="btn" disabled={!selectedProgram} onClick={() => setRevealed(true)}>
+          <button type="button" className="btn intake__reveal" disabled={!selectedProgram} onClick={() => setRevealed(true)}>
             Reveal what my school hides
           </button>
         </section>
