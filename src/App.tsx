@@ -11,7 +11,9 @@ import type { Program } from './data/programs/types.ts'
 import { buildCallScript, type CallContext } from './lib/callScript.ts'
 import { buildPlan, upcomingTerm } from './lib/plan.ts'
 import { computeCredentials } from './lib/credentials.ts'
+import { searchCourses, catalogueTitle } from './lib/courseSearch.ts'
 import { courseInfo } from './data/prereqs.ts'
+import { catalogueCourses } from './data/courses.ts'
 import './App.css'
 
 function fileToBase64(file: File): Promise<string> {
@@ -171,7 +173,7 @@ function App() {
   function courseLabel(code: string) {
     // Prerequisites can pull in courses from outside the program's own title map — fall back to the
     // scraped catalogue so they don't render as a bare code.
-    const title = selectedProgram?.courseTitles[code] ?? courseInfo[code]?.title
+    const title = selectedProgram?.courseTitles[code] ?? courseInfo[code]?.title ?? catalogueTitle(code)
     const display = courseCode(code)
     return title ? `${display} — ${title}` : display
   }
@@ -266,12 +268,21 @@ function App() {
     return [...codes].sort()
   }, [matches])
 
-  const [notTakenCourses, takenCourses] = useMemo(() => {
-    const notTaken: string[] = []
-    const taken: string[] = []
-    for (const code of allRequirementCourses) (completed.has(code) ? taken : notTaken).push(code)
-    return [notTaken, taken]
-  }, [allRequirementCourses, completed])
+  const notTakenCourses = useMemo(
+    () => allRequirementCourses.filter((code) => !completed.has(code)),
+    [allRequirementCourses, completed],
+  )
+  // Everything the student has, including courses added by search that this program never asks for
+  // — those still count toward certificates, minors and other specializations.
+  const takenCourses = useMemo(() => [...completed].sort(), [completed])
+
+  const [courseQuery, setCourseQuery] = useState('')
+  const courseResults = useMemo(() => searchCourses(courseQuery), [courseQuery])
+
+  function addCourse(code: string) {
+    setCompleted((prev) => new Set(prev).add(code))
+    setCourseQuery('')
+  }
 
   function toggleCourse(code: string) {
     setCompleted((prev) => {
@@ -597,8 +608,58 @@ function App() {
                   )}
                   {uploadStatus === 'error' && <p className="upload-status upload-status--error">{uploadError}</p>}
 
+                  <div className="course-search">
+                    <label className="step__label" htmlFor="course-search-input">
+                      Add any course you&rsquo;ve taken
+                    </label>
+                    <p className="hint">
+                      Search all {catalogueCourses.length.toLocaleString()} USask undergraduate courses by code or
+                      title — including ones your program never asks for. Those are often what puts a certificate or
+                      minor within reach.
+                    </p>
+                    <input
+                      id="course-search-input"
+                      className="resources__input"
+                      value={courseQuery}
+                      onChange={(e) => setCourseQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && courseResults[0]) {
+                          e.preventDefault()
+                          addCourse(courseResults[0].code)
+                        }
+                      }}
+                      placeholder={'e.g. CMPT 280, or “data structures”'}
+                      autoComplete="off"
+                      aria-label="Search for a course by code or title"
+                    />
+                    {courseQuery.trim().length > 0 && (
+                      <ul className="course-search__results">
+                        {courseResults.length === 0 ? (
+                          <li className="course-search__empty">
+                            No course in the catalogue matches &ldquo;{courseQuery}&rdquo;.
+                          </li>
+                        ) : (
+                          courseResults.map((c) => (
+                            <li key={c.code}>
+                              <button
+                                type="button"
+                                className="course-search__hit"
+                                disabled={completed.has(c.code)}
+                                onClick={() => addCourse(c.code)}
+                              >
+                                <span className="course-search__code">{courseCode(c.code)}</span>
+                                <span className="course-search__title">{c.title}</span>
+                                <span className="course-search__add">{completed.has(c.code) ? '✓ added' : '+ add'}</span>
+                              </button>
+                            </li>
+                          ))
+                        )}
+                      </ul>
+                    )}
+                  </div>
+
                   <details className="intake__manual" open={uploadStatus === 'success' || uploadStatus === 'error'}>
-                    <summary>{takenCourses.length > 0 ? 'Review or edit detected courses' : 'Or enter manually'}</summary>
+                    <summary>{takenCourses.length > 0 ? 'Review or edit detected courses' : 'Or pick from your program’s requirements'}</summary>
                     <p className="hint">Toggle courses to explore how the ranking changes.</p>
                     <ul className="checklist">
                       {notTakenCourses.map((code) => (
