@@ -10,6 +10,7 @@ import { computerScience } from './data/programs/computerScience.ts'
 import type { Program } from './data/programs/types.ts'
 import { buildCallScript, type CallContext } from './lib/callScript.ts'
 import { buildPlan, upcomingTerm } from './lib/plan.ts'
+import { courseInfo } from './data/prereqs.ts'
 import './App.css'
 
 function fileToBase64(file: File): Promise<string> {
@@ -139,7 +140,9 @@ function App() {
         : null
 
   function courseLabel(code: string) {
-    const title = selectedProgram?.courseTitles[code]
+    // Prerequisites can pull in courses from outside the program's own title map — fall back to the
+    // scraped catalogue so they don't render as a bare code.
+    const title = selectedProgram?.courseTitles[code] ?? courseInfo[code]?.title
     const display = courseCode(code)
     return title ? `${display} — ${title}` : display
   }
@@ -296,20 +299,32 @@ function App() {
   )
   const [planCopied, setPlanCopied] = useState(false)
 
+  const hiddenPrereqs = useMemo(
+    () => plan.flatMap((t) => t.courses).filter((c) => c.reason === 'prerequisite'),
+    [plan],
+  )
+
   async function copyPlan() {
     const lines = [
       `StudyMax plan — ${hero.spec.name} (${selectedProgram?.name ?? ''})`,
-      `${hero.remaining} course${hero.remaining === 1 ? '' : 's'} remaining, ${coursesPerTerm} per term.`,
+      `${hero.remaining} required course${hero.remaining === 1 ? '' : 's'} outstanding` +
+        (hiddenPrereqs.length > 0
+          ? `, plus ${hiddenPrereqs.length} prerequisite${hiddenPrereqs.length === 1 ? '' : 's'} not listed on the specialization page`
+          : '') +
+        `. ${coursesPerTerm} per term.`,
       '',
       ...plan.flatMap((term) => [
         `${term.label}:`,
-        ...term.courses.map(
-          (c) =>
-            `  - ${courseLabel(c.code)}${c.alsoAdvances.length > 0 ? ` (also counts toward: ${c.alsoAdvances.join(', ')})` : ''}`,
-        ),
+        ...term.courses.map((c) => {
+          const notes = [
+            c.reason === 'prerequisite' ? `prerequisite for ${courseCode(c.neededBy ?? '')}` : null,
+            c.alsoAdvances.length > 0 ? `also counts toward: ${c.alsoAdvances.join(', ')}` : null,
+          ].filter(Boolean)
+          return `  - ${courseLabel(c.code)}${notes.length > 0 ? ` (${notes.join('; ')})` : ''}`
+        }),
       ]),
       '',
-      'Course order follows course level, not verified prerequisite chains — confirm with an advisor.',
+      'Prerequisites and sequencing from catalogue.usask.ca. Confirm course offerings by term with an advisor.',
     ]
     await navigator.clipboard.writeText(lines.join('\n'))
     setPlanCopied(true)
@@ -659,6 +674,16 @@ function App() {
                       <strong>{plan[plan.length - 1].label}</strong>. Where a requirement let you choose, we picked the
                       option that also counts toward the most other specializations.
                     </p>
+                    {hiddenPrereqs.length > 0 && (
+                      <p className="plan__hidden-cost">
+                        <strong>
+                          {hiddenPrereqs.length} course{hiddenPrereqs.length === 1 ? '' : 's'} below{' '}
+                          {hiddenPrereqs.length === 1 ? 'is' : 'are'} not on the specialization page
+                        </strong>{' '}
+                        — {hiddenPrereqs.length === 1 ? "it's a prerequisite" : "they're prerequisites"} you need before
+                        you&rsquo;re allowed to register for the ones that are. That&rsquo;s the real cost.
+                      </p>
+                    )}
 
                     <ol className="plan__terms">
                       {plan.map((term, i) => (
@@ -666,8 +691,18 @@ function App() {
                           <p className="plan__term-label">{term.label}</p>
                           <ul className="plan__courses">
                             {term.courses.map((c) => (
-                              <li key={c.code} className="plan__course">
+                              <li key={c.code} className={`plan__course plan__course--${c.reason}`}>
                                 <span className="plan__course-name">{courseLabel(c.code)}</span>
+                                {c.reason === 'prerequisite' && (
+                                  <span className="plan__prereq">
+                                    Prerequisite for {courseCode(c.neededBy ?? '')}
+                                    {c.prerequisiteText && (
+                                      <em className="plan__prereq-rule">
+                                        {courseCode(c.neededBy ?? '')} requires: {c.prerequisiteText}
+                                      </em>
+                                    )}
+                                  </span>
+                                )}
                                 {c.alsoAdvances.length > 0 && (
                                   <span className="plan__double-dip">
                                     Also counts toward {c.alsoAdvances.length} other specialization
@@ -687,9 +722,9 @@ function App() {
                       </button>
                     </div>
                     <p className="plan__caveat">
-                      Terms are ordered by course level, not by verified prerequisite chains — USask doesn&rsquo;t
-                      publish those in a machine-readable form, so we don&rsquo;t guess. Confirm sequencing with your
-                      advisor.
+                      Prerequisites come from catalogue.usask.ca verbatim; nothing here is inferred. What we
+                      can&rsquo;t know is which terms a course is actually offered in — confirm that with your advisor
+                      before you register.
                     </p>
                   </section>
                 )}

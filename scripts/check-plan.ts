@@ -1,7 +1,8 @@
 // Sanity check for the term planner. Run: node --experimental-strip-types scripts/check-plan.ts
 import assert from 'node:assert/strict'
 import { computeMatches } from '../src/lib/match.ts'
-import { buildPlan, selectCourses, courseLevel, upcomingTerm } from '../src/lib/plan.ts'
+import { buildPlan, selectCourses, withPrerequisites, courseLevel, upcomingTerm } from '../src/lib/plan.ts'
+import { courseInfo } from '../src/data/prereqs.ts'
 import { completedCourses } from '../src/data/transcript.ts'
 import { specializations } from '../src/data/specializations.ts'
 
@@ -10,6 +11,16 @@ const matches = computeMatches(specializations, completed)
 
 assert.equal(courseLevel('CMPT141'), 1)
 assert.equal(courseLevel('CMPT423'), 4)
+
+// --- scraped catalogue data is present and shaped right ---
+assert.equal(courseInfo.CMPT280.prerequisiteText, 'CMPT 270', 'CMPT280 prerequisite is CMPT 270, verbatim')
+assert.deepEqual(courseInfo.CMPT280.requires, [['CMPT270']])
+assert.deepEqual(
+  courseInfo.CMPT423.requires,
+  [['CMPT317'], ['STAT242', 'STAT245', 'EE216'], ['MATH164']],
+  'AND-groups of OR-options parsed from the catalogue line',
+)
+assert.equal(courseInfo.CMPT141.creditUnits, 3)
 
 // --- selection covers exactly the outstanding requirement, never a completed course ---
 for (const match of matches) {
@@ -21,6 +32,10 @@ for (const match of matches) {
   )
   assert.equal(new Set(picked.map((p) => p.code)).size, picked.length, `${match.spec.id}: no duplicate picks`)
   assert.ok(
+    picked.every((p) => p.reason === 'requirement'),
+    `${match.spec.id}: raw selection contains only requirements`,
+  )
+  assert.ok(
     picked.every((p) => !p.alsoAdvances.includes(match.spec.name)),
     `${match.spec.id}: alsoAdvances excludes the target specialization itself`,
   )
@@ -29,17 +44,72 @@ for (const match of matches) {
 // --- choice slots prefer the option that double-dips ---
 const infoVis = matches.find((m) => m.spec.id === 'information-visualization')
 assert.ok(infoVis, 'information-visualization should exist in the catalogue data')
-const infoVisPicks = selectCourses(infoVis, specializations, completed)
 assert.ok(
-  infoVisPicks.some((p) => p.alsoAdvances.length > 0),
+  selectCourses(infoVis, specializations, completed).some((p) => p.alsoAdvances.length > 0),
   'at least one planned course should also advance another specialization',
 )
 
-// --- terms chunk correctly and advance Fall -> Winter -> Fall ---
+// --- prerequisite expansion is additive, deduplicated, and never re-adds a completed course ---
+for (const match of matches) {
+  const picked = selectCourses(match, specializations, completed)
+  const expanded = withPrerequisites(picked, completed)
+  assert.ok(expanded.length >= picked.length, `${match.spec.id}: expansion only adds`)
+  assert.equal(
+    new Set(expanded.map((c) => c.code)).size,
+    expanded.length,
+    `${match.spec.id}: no duplicate courses after expansion`,
+  )
+  assert.ok(
+    expanded.every((c) => !completed.has(c.code)),
+    `${match.spec.id}: never plans a completed course as a prerequisite`,
+  )
+  for (const course of expanded.filter((c) => c.reason === 'prerequisite')) {
+    assert.ok(course.neededBy, `${course.code}: a prerequisite records what needs it`)
+    assert.ok(
+      expanded.some((c) => c.code === course.neededBy),
+      `${course.code}: the course that needs it is in the same plan`,
+    )
+  }
+}
+
+// --- a known hidden prerequisite is surfaced ---
+// Machine Learning (CMPT 423) requires MATH 164, which the Machine Learning specialization itself
+// never lists. A student reading only the specialization page would not see that cost.
+const mlPlan = withPrerequisites(
+  [{ code: 'CMPT423', reason: 'requirement', alsoAdvances: [] }],
+  new Set<string>(),
+)
+assert.ok(
+  mlPlan.some((c) => c.code === 'MATH164' && c.reason === 'prerequisite'),
+  'CMPT423 pulls in MATH164 as a hidden prerequisite',
+)
+assert.ok(
+  mlPlan.some((c) => c.code === 'CMPT317' && c.reason === 'prerequisite'),
+  'CMPT423 pulls in CMPT317 as a hidden prerequisite',
+)
+
+// --- terms respect prerequisites: nothing lands in or before its prerequisite's term ---
 const target = matches.find((m) => m.remaining >= 3)
 assert.ok(target, 'sample transcript should leave at least one specialization 3+ courses out')
 const plan = buildPlan(target, specializations, completed, 2, { season: 'Fall', year: 2026 })
-assert.equal(plan.length, Math.ceil(target.remaining / 2), 'term count = courses / per-term, rounded up')
+
+const termIndex = new Map<string, number>()
+plan.forEach((term, i) => term.courses.forEach((c) => termIndex.set(c.code, i)))
+for (const [code, index] of termIndex) {
+  for (const options of courseInfo[code]?.requires ?? []) {
+    const inPlan = options.filter((o) => termIndex.has(o))
+    if (options.some((o) => completed.has(o)) || inPlan.length === 0) continue
+    assert.ok(
+      inPlan.some((o) => termIndex.get(o)! < index),
+      `${code} must come after its prerequisite (one of ${options.join(', ')})`,
+    )
+  }
+}
+
+assert.ok(
+  plan.every((t) => t.courses.length <= 2),
+  'no term exceeds the per-term cap',
+)
 assert.deepEqual(
   buildPlan(target, specializations, completed, 1, { season: 'Fall', year: 2026 })
     .slice(0, 3)
@@ -47,19 +117,16 @@ assert.deepEqual(
   ['Fall 2026', 'Winter 2027', 'Fall 2027'],
   'terms alternate Fall then the following Winter',
 )
-assert.ok(
-  plan.every((t) => t.courses.length <= 2),
-  'no term exceeds the per-term cap',
-)
-assert.equal(
-  plan.flatMap((t) => t.courses).length,
-  target.remaining,
-  'every outstanding course lands in some term',
-)
 
-// --- lower-level courses are scheduled first ---
-const levels = plan.flatMap((t) => t.courses).map((c) => courseLevel(c.code))
-assert.deepEqual(levels, [...levels].sort((a, b) => a - b), 'plan is ordered by course level ascending')
+// --- opting out of prerequisites yields exactly the required courses ---
+const bare = buildPlan(target, specializations, completed, 2, { season: 'Fall', year: 2026 }, {
+  includePrerequisites: false,
+})
+assert.equal(
+  bare.flatMap((t) => t.courses).length,
+  target.remaining,
+  'without prerequisite expansion, every outstanding course lands in some term and nothing else does',
+)
 
 // --- degrades, never throws ---
 const done = matches.find((m) => m.remaining === 0)
