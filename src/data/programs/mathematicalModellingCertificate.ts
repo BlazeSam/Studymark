@@ -7,6 +7,7 @@ import { courseTitles } from '../courseTitles.ts'
 export const mathematicalModellingCertificate: Program = {
   id: 'mathematical-modelling-certificate',
   name: 'Certificate in Mathematical Modelling',
+  kind: 'certificate',
   courseTitles,
   specializations: [
     {

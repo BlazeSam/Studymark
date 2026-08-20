@@ -7,6 +7,7 @@ import { courseTitles } from '../courseTitles.ts'
 export const formalReasoningCertificate: Program = {
   id: 'formal-reasoning-certificate',
   name: 'Certificate in Formal Reasoning',
+  kind: 'certificate',
   courseTitles,
   specializations: [
     {

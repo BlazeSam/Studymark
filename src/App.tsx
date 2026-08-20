@@ -10,6 +10,7 @@ import { computerScience } from './data/programs/computerScience.ts'
 import type { Program } from './data/programs/types.ts'
 import { buildCallScript, type CallContext } from './lib/callScript.ts'
 import { buildPlan, upcomingTerm } from './lib/plan.ts'
+import { computeCredentials } from './lib/credentials.ts'
 import { courseInfo } from './data/prereqs.ts'
 import './App.css'
 
@@ -28,8 +29,16 @@ type Lookup =
 
 type UniversityChoice = '' | 'usask' | 'other'
 
-const WHY_IT_MATTERS =
-  'Specializations appear on your official transcript and signal focused expertise to employers — beyond the base CS degree.'
+const WHY_IT_MATTERS: Record<TargetKind, string> = {
+  specialization:
+    'Specializations appear on your official transcript and signal focused expertise to employers — beyond the base CS degree.',
+  certificate:
+    'A certificate is a separate credential with its own line on your transcript — earned alongside your degree, not instead of part of it.',
+  minor:
+    'A minor is a separate credential with its own line on your transcript — earned alongside your degree, not instead of part of it.',
+}
+
+type TargetKind = 'specialization' | 'certificate' | 'minor'
 
 const ACCENTS = ['pear', 'cyan', 'mint'] as const
 
@@ -88,6 +97,26 @@ function CourseCheck({ label, checked, onToggle }: { label: string; checked: boo
         <span className="check__label">{label}</span>
       </label>
     </li>
+  )
+}
+
+function OptionList({ options, label }: { options: string[]; label: (code: string) => string }) {
+  // Some slots offer a dozen interchangeable courses. Showing all of them buries the ones that
+  // matter, so name a few and let the student open the rest.
+  const SHOWN = 3
+  if (options.length <= SHOWN) return <>{options.map(label).join(' or ')}</>
+  return (
+    <>
+      {options.slice(0, SHOWN).map(label).join(' or ')}{' '}
+      <details className="options-more">
+        <summary>or {options.length - SHOWN} other options</summary>
+        <ul>
+          {options.slice(SHOWN).map((code) => (
+            <li key={code}>{label(code)}</li>
+          ))}
+        </ul>
+      </details>
+    </>
   )
 }
 
@@ -169,8 +198,30 @@ function App() {
     if (heroId === null && matches.length > 0) setHeroId(matches[0].spec.id)
   }, [heroId, matches])
 
-  const hero = matches.find((m) => m.spec.id === heroId) ?? matches[0] ?? EMPTY_MATCH
+  // Certificates and minors the student is partway through without having declared them. Ranked
+  // and planned by the same engine as the specializations — they are just requirement lists.
+  const credentials = useMemo(
+    () => computeCredentials(selectedSchool?.programs ?? [], completed, selectedProgram?.id),
+    [selectedSchool, completed, selectedProgram],
+  )
+
+  // Everything a planned course could advance: the program's specializations plus the credentials.
+  const planningSpecs = useMemo(
+    () => [...(selectedProgram?.specializations ?? []), ...credentials.map((c) => c.spec)],
+    [selectedProgram, credentials],
+  )
+
+  const hero =
+    matches.find((m) => m.spec.id === heroId) ??
+    credentials.find((c) => c.spec.id === heroId) ??
+    matches[0] ??
+    EMPTY_MATCH
   const rest = matches.filter((m) => m.spec.id !== hero.spec.id)
+  // A credential target ('certificate' / 'minor') reads differently from a specialization, and the
+  // hero copy has to follow. computeCredentials only ever returns those two kinds.
+  const heroCredentialKind = credentials.find((c) => c.spec.id === hero.spec.id)?.program.kind
+  const heroKind: TargetKind =
+    heroCredentialKind === 'certificate' || heroCredentialKind === 'minor' ? heroCredentialKind : 'specialization'
   const tickValue = useTickUp(hero.remaining)
 
   const [burst, setBurst] = useState(false)
@@ -293,9 +344,9 @@ function App() {
   const plan = useMemo(
     () =>
       hero.remaining > 0
-        ? buildPlan(hero, selectedProgram?.specializations ?? [], completed, coursesPerTerm, upcomingTerm(today))
+        ? buildPlan(hero, planningSpecs, completed, coursesPerTerm, upcomingTerm(today))
         : [],
-    [hero, selectedProgram, completed, coursesPerTerm, today],
+    [hero, planningSpecs, completed, coursesPerTerm, today],
   )
   const [planCopied, setPlanCopied] = useState(false)
 
@@ -616,9 +667,9 @@ function App() {
                       <h1 className="hero__headline">
                         {hero.remaining === 0
                           ? `${hero.spec.name} — done. It'll show on your transcript.`
-                          : `course${hero.remaining === 1 ? '' : 's'} from the ${hero.spec.name} specialization.`}
+                          : `course${hero.remaining === 1 ? '' : 's'} from ${heroKind === 'specialization' ? `the ${hero.spec.name} specialization` : hero.spec.name}.`}
                       </h1>
-                      <p className="hero__why">{WHY_IT_MATTERS}</p>
+                      <p className="hero__why">{WHY_IT_MATTERS[heroKind]}</p>
                     </div>
                   </div>
                   <div className="hero__bar">
@@ -627,7 +678,7 @@ function App() {
                   {hero.remaining > 0 && (
                     <ul className="hero__remaining">
                       {hero.unsatisfied.map((g, i) => (
-                        <li key={i}>{g.options.map(courseLabel).join(' or ')}</li>
+                        <li key={i}><OptionList options={g.options} label={courseLabel} /></li>
                       ))}
                     </ul>
                   )}
@@ -655,7 +706,7 @@ function App() {
                     <div className="plan__head">
                       <h2 className="section__title">Your path to {hero.spec.name}</h2>
                       <label className="plan__control">
-                        <span>Specialization courses per term</span>
+                        <span>Courses per term</span>
                         <select
                           className="resources__input"
                           value={coursesPerTerm}
@@ -672,7 +723,7 @@ function App() {
                     <p className="hint">
                       Finishes in {plan.length} term{plan.length === 1 ? '' : 's'} — by{' '}
                       <strong>{plan[plan.length - 1].label}</strong>. Where a requirement let you choose, we picked the
-                      option that also counts toward the most other specializations.
+                      option that also counts toward the most other credentials.
                     </p>
                     {hiddenPrereqs.length > 0 && (
                       <p className="plan__hidden-cost">
@@ -705,8 +756,7 @@ function App() {
                                 )}
                                 {c.alsoAdvances.length > 0 && (
                                   <span className="plan__double-dip">
-                                    Also counts toward {c.alsoAdvances.length} other specialization
-                                    {c.alsoAdvances.length === 1 ? '' : 's'}: {c.alsoAdvances.join(', ')}
+                                    Also counts toward: {c.alsoAdvances.join(', ')}
                                   </span>
                                 )}
                               </li>
@@ -725,6 +775,55 @@ function App() {
                       Prerequisites come from catalogue.usask.ca verbatim; nothing here is inferred. What we
                       can&rsquo;t know is which terms a course is actually offered in — confirm that with your advisor
                       before you register.
+                    </p>
+                  </section>
+                )}
+
+                {credentials.length > 0 && (
+                  <section className="section section--band credentials" data-band="mint">
+                    <h2 className="section__title">Certificates and minors you&rsquo;re already partway through</h2>
+                    <p className="hint">
+                      Separate credentials from your degree, each with their own line on your transcript. Your major
+                      already covers part of them — this is how much is left.
+                    </p>
+                    <ol className="credentials__list">
+                      {credentials.map((c) => (
+                        <li key={c.spec.id} className="credential-card">
+                          <div className="credential-card__head">
+                            <div>
+                              <span className="credential-card__kind">
+                                {c.program.kind === 'minor' ? 'Minor' : 'Certificate'}
+                              </span>
+                              <h3 className="credential-card__name">{c.program.name}</h3>
+                            </div>
+                            <span className="credential-card__count tnum">
+                              {c.remaining === 0 ? 'Done' : `${c.remaining} left`}
+                            </span>
+                          </div>
+                          <ProgressBar done={c.doneCount} total={c.totalRequired} />
+                          <p className="credential-card__progress">
+                            {c.doneCount} of {c.totalRequired} required courses already taken
+                          </p>
+                          {c.remaining > 0 && (
+                            <>
+                              <ul className="credential-card__missing">
+                                {c.unsatisfied.map((g, i) => (
+                                  <li key={i}><OptionList options={g.options} label={courseLabel} /></li>
+                                ))}
+                              </ul>
+                              <button type="button" className="btn btn--quiet" onClick={() => setHeroId(c.spec.id)}>
+                                Plan this one →
+                              </button>
+                            </>
+                          )}
+                        </li>
+                      ))}
+                    </ol>
+                    <p className="plan__caveat">
+                      Requirements are the catalogue&rsquo;s, but eligibility isn&rsquo;t: USask notes that
+                      &ldquo;registration in most senior CMPT courses will be restricted to students in the
+                      Department&rsquo;s programs.&rdquo; Confirm you can declare a credential before planning around
+                      it.
                     </p>
                   </section>
                 )}
@@ -755,7 +854,7 @@ function App() {
                           {m.remaining > 0 && (
                             <ul className="feed__missing">
                               {m.unsatisfied.map((g, i2) => (
-                                <li key={i2}>{g.options.map(courseLabel).join(' or ')}</li>
+                                <li key={i2}><OptionList options={g.options} label={courseLabel} /></li>
                               ))}
                             </ul>
                           )}

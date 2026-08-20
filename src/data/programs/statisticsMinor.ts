@@ -12,6 +12,7 @@ import { courseTitles } from '../courseTitles.ts'
 export const statisticsMinor: Program = {
   id: 'statistics-minor',
   name: 'Statistics Minor',
+  kind: 'minor',
   courseTitles,
   specializations: [
     {

@@ -8,6 +8,7 @@ import { courseTitles } from '../courseTitles.ts'
 export const astronomyCertificate: Program = {
   id: 'astronomy-certificate',
   name: 'Certificate in Astronomy',
+  kind: 'certificate',
   courseTitles,
   specializations: [
     {

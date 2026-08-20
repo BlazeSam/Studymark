@@ -1102,3 +1102,103 @@ select.resources__input {
   line-height: 1.45;
   opacity: 0.85;
 }
+
+/* ---------- credentials (certificates & minors earned alongside the degree) ---------- */
+
+.credentials__list {
+  list-style: none;
+  padding: 0;
+  margin-top: var(--space-md);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-sm);
+}
+
+.credential-card {
+  background: var(--color-paper);
+  border-radius: var(--radius-card);
+  padding: var(--space-sm) var(--space-md) var(--space-md);
+  box-shadow: 0 12px 32px -18px oklch(20% 0.012 250 / 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+
+.credential-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2xs);
+}
+
+.credential-card__kind {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-ink-2);
+}
+
+.credential-card__name {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  line-height: 1.15;
+}
+
+.credential-card__count {
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  white-space: nowrap;
+  padding: 0.2em 0.6em;
+  border-radius: var(--radius-pill);
+  background: color-mix(in oklch, var(--color-mint) 30%, var(--color-paper));
+}
+
+.credential-card__progress {
+  font-size: var(--text-sm);
+  color: var(--color-ink-2);
+}
+
+.credential-card__missing {
+  list-style: none;
+  padding: 0;
+  margin-top: var(--space-3xs);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3xs);
+  font-size: var(--text-sm);
+  line-height: 1.35;
+}
+
+.credential-card__missing li::before {
+  content: '○ ';
+  color: var(--color-ink-2);
+}
+
+.btn--quiet {
+  align-self: flex-start;
+  margin-top: var(--space-2xs);
+  font-size: var(--text-sm);
+  padding: 0.4em 0.9em;
+}
+
+/* ---------- long "choose one of" option lists ---------- */
+
+.options-more {
+  display: inline;
+  font-size: var(--text-xs);
+}
+
+.options-more summary {
+  display: inline;
+  cursor: pointer;
+  color: var(--color-ink-2);
+  text-decoration: underline dotted;
+  margin-left: 0.35em;
+}
+
+.options-more ul {
+  margin-top: var(--space-3xs);
+  padding-left: var(--space-sm);
+  color: var(--color-ink-2);
+}
