@@ -9,6 +9,7 @@ import type { School } from './data/schools/types.ts'
 import { computerScience } from './data/programs/computerScience.ts'
 import type { Program } from './data/programs/types.ts'
 import { buildCallScript, type CallContext } from './lib/callScript.ts'
+import { buildPlan, upcomingTerm } from './lib/plan.ts'
 import './App.css'
 
 function fileToBase64(file: File): Promise<string> {
@@ -39,6 +40,25 @@ const OTHER_PROGRAM: Program = { id: 'other', name: 'your program', specializati
 // as the actual reveal (hero/insight/feed are gated off in that case), only keeps other sections safe.
 const EMPTY_SPEC: Specialization = { id: 'none', name: 'your program', requirements: [] }
 const EMPTY_MATCH: SpecializationMatch = { spec: EMPTY_SPEC, totalRequired: 0, doneCount: 0, remaining: 0, unsatisfied: [] }
+
+const SAVE_KEY = 'studymax:v1'
+
+interface SavedState {
+  universityId: UniversityChoice
+  programId: string
+  completed: string[]
+  revealed: boolean
+}
+
+// Intake selections survive a refresh so a half-finished session isn't lost. The phone number is
+// deliberately excluded — it never touches storage.
+function loadSaved(): Partial<SavedState> {
+  try {
+    return JSON.parse(localStorage.getItem(SAVE_KEY) ?? '{}')
+  } catch {
+    return {}
+  }
+}
 
 function formatDate(date: Date) {
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
@@ -104,9 +124,10 @@ function useTickUp(target: number) {
 
 function App() {
   // --- intake: university → program → courses → phone ---
-  const [universityId, setUniversityId] = useState<UniversityChoice>('')
-  const [programId, setProgramId] = useState('')
-  const [revealed, setRevealed] = useState(false)
+  const saved = useRef(loadSaved()).current
+  const [universityId, setUniversityId] = useState<UniversityChoice>(saved.universityId ?? '')
+  const [programId, setProgramId] = useState(saved.programId ?? '')
+  const [revealed, setRevealed] = useState(saved.revealed ?? false)
 
   const selectedSchool = universityId === 'usask' ? usask : null
   const availablePrograms = selectedSchool?.programs ?? []
@@ -123,9 +144,18 @@ function App() {
     return title ? `${display} — ${title}` : display
   }
 
-  const [completed, setCompleted] = useState<Set<string>>(() => new Set())
+  const [completed, setCompleted] = useState<Set<string>>(() => new Set(saved.completed ?? []))
   const completedRef = useRef(completed)
   completedRef.current = completed
+
+  useEffect(() => {
+    const state: SavedState = { universityId, programId, completed: [...completed], revealed }
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify(state))
+    } catch {
+      // storage full or blocked (private mode) — the app works fine without persistence
+    }
+  }, [universityId, programId, completed, revealed])
   const matches = useMemo(
     () => computeMatches(selectedProgram?.specializations ?? [], completed),
     [selectedProgram, completed],
@@ -254,6 +284,37 @@ function App() {
   }
 
   const today = useMemo(() => new Date(), [])
+
+  // --- term-by-term path to the closest specialization ---
+  const [coursesPerTerm, setCoursesPerTerm] = useState(2)
+  const plan = useMemo(
+    () =>
+      hero.remaining > 0
+        ? buildPlan(hero, selectedProgram?.specializations ?? [], completed, coursesPerTerm, upcomingTerm(today))
+        : [],
+    [hero, selectedProgram, completed, coursesPerTerm, today],
+  )
+  const [planCopied, setPlanCopied] = useState(false)
+
+  async function copyPlan() {
+    const lines = [
+      `StudyMax plan — ${hero.spec.name} (${selectedProgram?.name ?? ''})`,
+      `${hero.remaining} course${hero.remaining === 1 ? '' : 's'} remaining, ${coursesPerTerm} per term.`,
+      '',
+      ...plan.flatMap((term) => [
+        `${term.label}:`,
+        ...term.courses.map(
+          (c) =>
+            `  - ${courseLabel(c.code)}${c.alsoAdvances.length > 0 ? ` (also counts toward: ${c.alsoAdvances.join(', ')})` : ''}`,
+        ),
+      ]),
+      '',
+      'Course order follows course level, not verified prerequisite chains — confirm with an advisor.',
+    ]
+    await navigator.clipboard.writeText(lines.join('\n'))
+    setPlanCopied(true)
+    setTimeout(() => setPlanCopied(false), 2000)
+  }
 
   const otherCloseSpecializations = useMemo(
     () =>
@@ -574,8 +635,68 @@ function App() {
                   </section>
                 )}
 
+                {plan.length > 0 && (
+                  <section className="section section--band plan" data-band="lavender">
+                    <div className="plan__head">
+                      <h2 className="section__title">Your path to {hero.spec.name}</h2>
+                      <label className="plan__control">
+                        <span>Specialization courses per term</span>
+                        <select
+                          className="resources__input"
+                          value={coursesPerTerm}
+                          onChange={(e) => setCoursesPerTerm(Number(e.target.value))}
+                        >
+                          {[1, 2, 3, 4].map((n) => (
+                            <option key={n} value={n}>
+                              {n}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <p className="hint">
+                      Finishes in {plan.length} term{plan.length === 1 ? '' : 's'} — by{' '}
+                      <strong>{plan[plan.length - 1].label}</strong>. Where a requirement let you choose, we picked the
+                      option that also counts toward the most other specializations.
+                    </p>
+
+                    <ol className="plan__terms">
+                      {plan.map((term, i) => (
+                        <li key={term.label} className={`plan__term plan__term--${ACCENTS[i % ACCENTS.length]}`}>
+                          <p className="plan__term-label">{term.label}</p>
+                          <ul className="plan__courses">
+                            {term.courses.map((c) => (
+                              <li key={c.code} className="plan__course">
+                                <span className="plan__course-name">{courseLabel(c.code)}</span>
+                                {c.alsoAdvances.length > 0 && (
+                                  <span className="plan__double-dip">
+                                    Also counts toward {c.alsoAdvances.length} other specialization
+                                    {c.alsoAdvances.length === 1 ? '' : 's'}: {c.alsoAdvances.join(', ')}
+                                  </span>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        </li>
+                      ))}
+                    </ol>
+
+                    <div className="plan__actions">
+                      <button type="button" className="btn" onClick={copyPlan}>
+                        {planCopied ? '✓ Copied' : 'Copy plan for my advisor'}
+                      </button>
+                    </div>
+                    <p className="plan__caveat">
+                      Terms are ordered by course level, not by verified prerequisite chains — USask doesn&rsquo;t
+                      publish those in a machine-readable form, so we don&rsquo;t guess. Confirm sequencing with your
+                      advisor.
+                    </p>
+                  </section>
+                )}
+
                 <section className="section">
                   <h2 className="section__title">Ranked by fewest courses remaining</h2>
+                  <p className="hint">Pick any one to make it your target — the plan above rebuilds for it.</p>
                   <ol className="feed">
                     {rest.map((m, i) => {
                       const { min, max } = closenessRange
@@ -586,13 +707,16 @@ function App() {
                           className={`feed__row feed__row--${ACCENTS[i % ACCENTS.length]}`}
                           style={{ '--closeness': closeness } as CSSProperties}
                         >
-                          <div className="feed__head">
-                            <span className="feed__name">{m.spec.name}</span>
-                            <span className="feed__progress">
-                              {m.doneCount}/{m.totalRequired}
+                          <button type="button" className="feed__target" onClick={() => setHeroId(m.spec.id)}>
+                            <span className="feed__head">
+                              <span className="feed__name">{m.spec.name}</span>
+                              <span className="feed__progress">
+                                {m.doneCount}/{m.totalRequired}
+                              </span>
                             </span>
-                          </div>
-                          <ProgressBar done={m.doneCount} total={m.totalRequired} />
+                            <ProgressBar done={m.doneCount} total={m.totalRequired} />
+                            <span className="feed__cta">Plan this one →</span>
+                          </button>
                           {m.remaining > 0 && (
                             <ul className="feed__missing">
                               {m.unsatisfied.map((g, i2) => (
