@@ -60,6 +60,19 @@ const MAX_TRANSCRIPT_BYTES = 3_000_000
 /** An upload failure whose message is safe and useful to show the student verbatim. */
 class UploadError extends Error {}
 
+// A program the school data doesn't cover yet is identified by its Arts & Science subject code, so
+// the choice survives a refresh the same way a real program id does.
+const SUBJECT_PROGRAM_PREFIX = 'subject:'
+
+interface ProgramOption {
+  id: string
+  name: string
+  /** Present only for programs derived from an Arts & Science subject. */
+  subjectCode?: string
+  /** Whether StudyMax has requirement data — i.e. whether it can build a plan, or only find money. */
+  hasData: boolean
+}
+
 const SAVE_KEY = 'studymax:v1'
 
 interface SavedState {
@@ -181,13 +194,82 @@ function App() {
   const [revealed, setRevealed] = useState(saved.revealed ?? false)
 
   const selectedSchool = universityId === 'usask' ? usask : null
-  const availablePrograms = selectedSchool?.programs ?? []
+  const availablePrograms = useMemo(() => selectedSchool?.programs ?? [], [selectedSchool])
+
+  // Every Arts & Science subject is pickable, not just the handful with requirement data. One
+  // without data still reaches the scholarship side of the app, which is most of its value.
+  const subjectProgram: Program | null = useMemo(() => {
+    if (!programId.startsWith(SUBJECT_PROGRAM_PREFIX)) return null
+    const code = programId.slice(SUBJECT_PROGRAM_PREFIX.length)
+    const subject = artsAndScienceSubjects.find((s) => s.code === code)
+    return subject ? { id: programId, name: subject.name, specializations: [], courseTitles: {} } : null
+  }, [programId])
+
   const selectedProgram: Program | null =
     universityId === 'usask'
-      ? (availablePrograms.find((p) => p.id === programId) ?? null)
+      ? (availablePrograms.find((p) => p.id === programId) ?? subjectProgram)
       : universityId === 'other'
         ? OTHER_PROGRAM
         : null
+
+  const programOptions = useMemo<ProgramOption[]>(() => {
+    const fromSchool = availablePrograms.map((p) => ({
+      id: p.id,
+      name: p.name,
+      hasData: p.specializations.length > 0,
+    }))
+    const named = new Set(fromSchool.map((p) => p.name.toLowerCase()))
+    const fromSubjects = artsAndScienceSubjects
+      .filter((subject) => !named.has(subject.name.toLowerCase()))
+      .map((subject) => ({
+        id: `${SUBJECT_PROGRAM_PREFIX}${subject.code}`,
+        name: subject.name,
+        subjectCode: subject.code,
+        hasData: false,
+      }))
+    return [...fromSchool, ...fromSubjects]
+  }, [availablePrograms])
+
+  const [programPickQuery, setProgramPickQuery] = useState('')
+  const [programOpen, setProgramOpen] = useState(false)
+  const programSearchRef = useRef<HTMLDivElement>(null)
+
+  // Name match first, then subject code ("PSY"), so both ways of thinking about a program work.
+  // Programs StudyMax can actually plan sort above the rest of the college.
+  const programResults = useMemo(() => {
+    const query = programPickQuery.trim().toLowerCase()
+    return programOptions
+      .map((option) => {
+        const name = option.name.toLowerCase()
+        const score =
+          query.length === 0
+            ? 1
+            : name.startsWith(query) || option.subjectCode?.toLowerCase().startsWith(query)
+              ? 3
+              : name.includes(query)
+                ? 2
+                : 0
+        return { option, score }
+      })
+      .filter((hit) => hit.score > 0)
+      .sort(
+        (a, b) =>
+          b.score - a.score ||
+          Number(b.option.hasData) - Number(a.option.hasData) ||
+          a.option.name.localeCompare(b.option.name),
+      )
+      .slice(0, 8)
+      .map((hit) => hit.option)
+  }, [programOptions, programPickQuery])
+
+  useEffect(() => {
+    if (!programOpen) return
+    function onPointerDown(e: PointerEvent) {
+      if (!programSearchRef.current?.contains(e.target as Node)) setProgramOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [programOpen])
 
   function courseLabel(code: string) {
     // Prerequisites can pull in courses from outside the program's own title map — fall back to the
@@ -634,20 +716,63 @@ function App() {
                 <label className="step__label" htmlFor="intake-program">
                   Program
                 </label>
-                <select
-                  id="intake-program"
-                  className="resources__input"
-                  value={programId}
-                  onChange={(e) => handleProgramChange(e.target.value)}
-                >
-                  <option value="">Select your program</option>
-                  {availablePrograms.map((p) => (
-                    <option key={p.id} value={p.id} disabled={p.specializations.length === 0}>
-                      {p.name}
-                      {p.specializations.length === 0 ? ' (coming soon)' : ''}
-                    </option>
-                  ))}
-                </select>
+                <div className="course-search program-picker" ref={programSearchRef}>
+                  <input
+                    id="intake-program"
+                    type="text"
+                    className="resources__input"
+                    value={programOpen ? programPickQuery : (selectedProgram?.name ?? '')}
+                    onChange={(e) => {
+                      setProgramPickQuery(e.target.value)
+                      setProgramOpen(true)
+                    }}
+                    onFocus={() => {
+                      setProgramPickQuery('')
+                      setProgramOpen(true)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') setProgramOpen(false)
+                      if (e.key === 'Enter' && programResults.length > 0) {
+                        e.preventDefault()
+                        handleProgramChange(programResults[0].id)
+                        setProgramOpen(false)
+                      }
+                    }}
+                    placeholder="Type your program — e.g. “psychology”, “computer science”"
+                    autoComplete="off"
+                    role="combobox"
+                    aria-expanded={programOpen}
+                    aria-controls="program-results"
+                  />
+                  {programOpen && (
+                    <ul className="course-search__results" id="program-results">
+                      {programResults.length === 0 ? (
+                        <li className="course-search__empty">
+                          No Arts &amp; Science program matches &ldquo;{programPickQuery}&rdquo;.
+                        </li>
+                      ) : (
+                        programResults.map((option) => (
+                          <li key={option.id}>
+                            <button
+                              type="button"
+                              className="course-search__hit"
+                              onClick={() => {
+                                handleProgramChange(option.id)
+                                setProgramOpen(false)
+                              }}
+                            >
+                              <span className="course-search__code">{option.subjectCode ?? ''}</span>
+                              <span className="course-search__title">{option.name}</span>
+                              <span className="course-search__add">
+                                {option.hasData ? 'full plan' : 'scholarships only'}
+                              </span>
+                            </button>
+                          </li>
+                        ))
+                      )}
+                    </ul>
+                  )}
+                </div>
               </div>
             </div>
           )}

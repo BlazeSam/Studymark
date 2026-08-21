@@ -1340,21 +1340,27 @@ a.plan__course-name:hover,
   margin-bottom: var(--space-md);
 }
 
-/* 58 subjects as collapsed rows. In columns they all fit on one screen, so opening a subject is a
-   click rather than a scroll hunt. */
+/* 58 subjects as collapsed rows across a grid, so they all fit on one screen and opening one is a
+   click rather than a scroll hunt. An open subject takes the full width instead of squeezing its
+   courses into a 11rem column. */
 .subject-browser__subjects {
   list-style: none;
   padding: 0;
   margin-top: var(--space-2xs);
   border-radius: var(--radius-input);
   background: var(--color-paper);
-  columns: 4 11rem;
-  column-gap: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  align-content: start;
 }
 
 .subject-browser__subjects > li {
-  break-inside: avoid;
   border-top: 1px solid color-mix(in oklch, var(--color-ink) 8%, transparent);
+  min-width: 0;
+}
+
+.subject-browser__subjects > li:has(details[open]) {
+  grid-column: 1 / -1;
 }
 
 .subject-browser__subjects summary {
@@ -1389,22 +1395,44 @@ a.plan__course-name:hover,
   white-space: nowrap;
 }
 
-/* A phone fits one column, and 58 rows of it is a long scroll — so cap the box there. Columns are
-   dropped first: a multi-column box with a max-height overflows sideways, hiding the rest. */
+/* A phone fits one column, and 58 rows of it is a long scroll — so cap the box there. */
 @media (max-width: 640px) {
   .subject-browser__subjects {
-    columns: auto;
+    grid-template-columns: 1fr;
     max-height: 22rem;
     overflow-y: auto;
   }
 }
 
-/* An open subject keeps its own courses in a capped, scrollable box so the columns around it don't
-   stretch down the page. */
+/* An open subject keeps its own courses in a capped, scrollable box so the grid around it doesn't
+   stretch down the page. The rows match the subject rows above them: same size, one line each. */
 .subject-browser__courses {
   max-height: 16rem;
   overflow-y: auto;
   padding: var(--space-3xs) var(--space-2xs) var(--space-2xs) var(--space-sm);
+  gap: 0;
+}
+
+.subject-browser__courses .check {
+  gap: var(--space-2xs);
+  padding: 0.1rem 0;
+  font-size: var(--text-xs);
+}
+
+.subject-browser__courses .check__box {
+  width: 16px;
+  height: 16px;
+}
+
+.subject-browser__courses .check__box::after {
+  width: 8px;
+  height: 5px;
+}
+
+.subject-browser__courses .check__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ---------- course search: results persist across adds ---------- */
