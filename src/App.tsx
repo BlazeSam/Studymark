@@ -416,8 +416,11 @@ function App() {
     setUniversityId('usask')
     setProgramId(computerScience.id)
     setCompleted(new Set(computerScience.sampleTranscript ?? []))
+    setUploadInProgress(computerScience.sampleInProgress ?? [])
     setHeroId(null)
-    setUploadStatus('idle')
+    // The sample is a real audit reduced to course codes, so it lands in the same state a finished
+    // upload does: completed courses counted, in-progress ones named, review list open.
+    setUploadStatus('success')
     setRevealed(true)
   }
 

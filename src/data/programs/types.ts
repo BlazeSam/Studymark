@@ -13,4 +13,6 @@ export interface Program {
   courseTitles: Record<string, string>
   /** Only populated where a real sample transcript exists. */
   sampleTranscript?: string[]
+  /** Courses the sample student is registered in but has not finished. */
+  sampleInProgress?: string[]
 }

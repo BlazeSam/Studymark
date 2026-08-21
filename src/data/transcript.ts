@@ -1,6 +1,8 @@
-// Completed (passed) courses from Oluwagbotemi Lafiaji's USask unofficial transcript,
-// as of 2026 Winter term. CMPT 214's first attempt (grade 58, excluded) is dropped —
-// only the retaken, included attempt (grade 82) counts.
+// The sample student: a real USask Computer Science DegreeWorks audit, dated 2026-08-06, reduced to
+// course codes. Nothing identifying is kept, and the audit itself is not in this repo.
+//
+// CMPT 214's first attempt (grade 58, marked (R) and excluded) is dropped — only the retaken,
+// included attempt (grade 82) counts as completed.
 export const completedCourses: string[] = [
   'ASTR113',
   'CMPT141',
@@ -30,4 +32,17 @@ export const completedCourses: string[] = [
   'STAT245',
   'STAT344',
   'STAT348',
+]
+
+// Registered but ungraded on the same audit, the seven preregistered classes. These are not
+// completed, so they never satisfy a requirement; the app shows them so a student can see the
+// difference between what they have and what they are sitting in right now.
+export const inProgressCourses: string[] = [
+  'CMPT332',
+  'CMPT340',
+  'CMPT353',
+  'CMPT360',
+  'CMPT370',
+  'CMPT434',
+  'MATH266',
 ]

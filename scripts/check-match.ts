@@ -1,7 +1,8 @@
 // Sanity check for computeMatches. Run: node --experimental-strip-types scripts/check-match.ts
 import assert from 'node:assert/strict'
 import { computeMatches, computeCourseOverlap } from '../src/lib/match.ts'
-import { completedCourses } from '../src/data/transcript.ts'
+import { completedCourses, inProgressCourses } from '../src/data/transcript.ts'
+import { catalogueCourses } from '../src/data/courses.ts'
 import { specializations } from '../src/data/specializations.ts'
 
 const completed = new Set(completedCourses)
@@ -39,5 +40,17 @@ assert.ok(
 // programs with no data yet (Math/Stats/Biology stubs) must degrade to empty, never throw
 assert.deepEqual(computeMatches([], completed), [], 'empty specializations list yields empty matches')
 assert.deepEqual(computeCourseOverlap([], completed), [], 'empty specializations list yields empty overlap')
+
+// --- the sample student mirrors the audit it came from ---
+assert.equal(completedCourses.length, 28, 'the audit lists 28 completed courses')
+assert.equal(inProgressCourses.length, 7, 'the audit lists 7 preregistered classes')
+assert.ok(
+  inProgressCourses.every((code) => !completedCourses.includes(code)),
+  'a preregistered class is not also completed',
+)
+assert.ok(
+  [...completedCourses, ...inProgressCourses].every((code) => catalogueCourses.some((c) => c.code === code)),
+  'every sample course is a real catalogue course',
+)
 
 console.log('match.check.ts: all assertions passed')
