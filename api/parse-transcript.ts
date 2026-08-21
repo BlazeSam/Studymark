@@ -53,7 +53,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   })
 
   if (!upstream.ok) {
-    res.status(502).json({ error: 'upstream error' })
+    // Pass the real reason through. Swallowing it here meant every failure — an oversized PDF, a
+    // scanned page image, an expired key — surfaced to the student as the same shrug.
+    const detail = await upstream.text().catch(() => '')
+    console.error(`anthropic ${upstream.status}: ${detail.slice(0, 500)}`)
+    res.status(502).json({
+      error: 'upstream error',
+      status: upstream.status,
+      detail: detail.slice(0, 300),
+    })
     return
   }
 
@@ -62,5 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const text = textBlock?.text ?? ''
   const completedCourses = parseTranscriptResponse(text, body.knownCourseCodes)
 
-  res.status(200).json({ completedCourses })
+  // A readable PDF with no recognisable courses is a different problem from an unreadable one, and
+  // the student needs to be told which.
+  res.status(200).json({ completedCourses, sawText: text.trim().length > 0 })
 }

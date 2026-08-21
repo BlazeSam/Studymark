@@ -53,6 +53,13 @@ const OTHER_PROGRAM: Program = { id: 'other', name: 'your program', specializati
 const EMPTY_SPEC: Specialization = { id: 'none', name: 'your program', requirements: [] }
 const EMPTY_MATCH: SpecializationMatch = { spec: EMPTY_SPEC, totalRequired: 0, doneCount: 0, remaining: 0, unsatisfied: [] }
 
+// Vercel's serverless request body limit is 4.5 MB; base64 costs about a third on top, so keep a
+// margin under it and fail before the upload rather than after.
+const MAX_TRANSCRIPT_BYTES = 3_000_000
+
+/** An upload failure whose message is safe and useful to show the student verbatim. */
+class UploadError extends Error {}
+
 const SAVE_KEY = 'studymax:v1'
 
 interface SavedState {
@@ -339,6 +346,14 @@ function App() {
     setUploadStatus('uploading')
     setUploadError(null)
     try {
+      // Vercel caps a function's request body at 4.5 MB, and base64 inflates a file by a third.
+      if (file.size > MAX_TRANSCRIPT_BYTES) {
+        throw new UploadError(
+          `That PDF is ${(file.size / 1e6).toFixed(1)} MB — the reader accepts up to ` +
+            `${(MAX_TRANSCRIPT_BYTES / 1e6).toFixed(1)} MB. Export a smaller copy, or add your courses below.`,
+        )
+      }
+
       const pdfBase64 = await fileToBase64(file)
       const knownCourseCodes = Object.keys(selectedProgram.courseTitles)
       const res = await fetch('/api/parse-transcript', {
@@ -346,16 +361,43 @@ function App() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ pdfBase64, knownCourseCodes }),
       })
-      if (!res.ok) throw new Error('parse failed')
+
+      if (res.status === 404) {
+        throw new UploadError(
+          'Transcript reading runs as a serverless function, which the local dev server ' +
+            "doesn't host — it works on the deployed site, or under `vercel dev`. Add your courses below for now.",
+        )
+      }
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null)
+        throw new UploadError(
+          detail?.status === 401 || detail?.status === 403
+            ? "The transcript reader's API key was rejected — that's ours to fix, not yours. Add your courses below."
+            : `The transcript reader failed${detail?.status ? ` (${detail.status})` : ''}. Add your courses below.`,
+        )
+      }
+
       const data = await res.json()
       const codes: string[] = data.completedCourses ?? []
-      if (codes.length === 0) throw new Error('nothing found')
+      if (codes.length === 0) {
+        throw new UploadError(
+          data.sawText === false
+            ? 'That PDF has no readable text — a scan or photo needs to be exported as text, or entered below.'
+            : `We read the file but found none of ${selectedProgram.name}'s courses in it. ` +
+              'If it was the right transcript, add the courses below.',
+        )
+      }
+
       setCompleted(new Set(codes))
       setHeroId(null)
       setUploadStatus('success')
-    } catch {
+    } catch (err) {
       setUploadStatus('error')
-      setUploadError("Couldn't read that file automatically — enter your courses manually below instead.")
+      setUploadError(
+        err instanceof UploadError
+          ? err.message
+          : "Couldn't read that file — add your courses below instead.",
+      )
     }
   }
 
