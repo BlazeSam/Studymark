@@ -12,11 +12,13 @@ export function buildCallScript(ctx: CallContext): string {
       ? `You've completed the ${ctx.specializationName} specialization.`
       : `You're ${ctx.coursesRemaining} course${ctx.coursesRemaining === 1 ? '' : 's'} away from the ${ctx.specializationName} specialization.`
 
+  // The call can't carry a URL, so it points at the link StudyMax already put on the screen.
   const awardLine = ctx.awardName
-    ? ` Also — the ${ctx.awardName} scholarship${ctx.awardDeadlineText ? `, ${ctx.awardDeadlineText.toLowerCase()}` : ''}, is worth a look.`
+    ? ` One more thing: the ${ctx.awardName}${ctx.awardDeadlineText ? `, ${ctx.awardDeadlineText.toLowerCase()}` : ''}.` +
+      ' The link is on your StudyMax screen — open it before the deadline.'
     : ''
 
-  return `Hi, this is your StudyMax reminder. ${specLine}${awardLine} That's it — good luck.`
+  return `Hi, this is your StudyMax reminder. No need to answer — I'm hanging up in a moment. ${specLine}${awardLine} That's it — good luck.`
 }
 
 /** Wraps the script in explicit one-way, no-conversation instructions for the call provider. */

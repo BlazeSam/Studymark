@@ -1,6 +1,6 @@
 // Sanity check for course search. Run: node --experimental-strip-types scripts/check-course-search.ts
 import assert from 'node:assert/strict'
-import { searchCourses, scoreCourse } from '../src/lib/courseSearch.ts'
+import { searchCourses, scoreCourse, catalogueUrl, catalogueTitle, CATALOGUE_HOME } from '../src/lib/courseSearch.ts'
 import { catalogueCourses, artsAndScienceSubjects } from '../src/data/courses.ts'
 
 // --- the scraped index itself ---
@@ -99,6 +99,20 @@ for (const code of ['ACC', 'EE', 'CE', 'NURS']) {
 assert.ok(
   artsAndScienceSubjects.every((s) => catalogueCourses.some((c) => c.code.startsWith(s.code))),
   'every listed subject has courses in the index',
+)
+
+// --- course links never point at a page the catalogue 404s ---
+// Verified live on 2026-08-21: catalogue.usask.ca/CMPT-384 is 200, catalogue.usask.ca/MATH-100 is a
+// hard 404 (a retired course that survives only in prerequisite prose), and the catalogue root is
+// always 200. Anything the scrape didn't list has to land on the root instead of a dead deep link.
+assert.equal(catalogueUrl('CMPT384'), 'https://catalogue.usask.ca/CMPT-384')
+for (const retired of ['MATH100', 'CMPT111', 'PHYS155', 'MATH325']) {
+  assert.equal(catalogueTitle(retired), undefined, `${retired} should not be in the scraped catalogue`)
+  assert.equal(catalogueUrl(retired), CATALOGUE_HOME, `${retired} falls back to the catalogue search page`)
+}
+assert.ok(
+  catalogueCourses.every((c) => catalogueUrl(c.code).startsWith('https://catalogue.usask.ca/')),
+  'every catalogued course still gets a catalogue link',
 )
 
 console.log(`check-course-search.ts: all assertions passed (${catalogueCourses.length} courses indexed)`)

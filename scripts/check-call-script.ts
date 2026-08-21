@@ -11,10 +11,12 @@ const withAward = buildCallScript({
 assert.ok(withAward.includes('1 course away from the Social Computing specialization'), 'singular course wording')
 assert.ok(withAward.includes('RCAF Foundation Student Scholarships'), 'includes award name')
 assert.ok(withAward.includes('closes in 6 days'), 'award deadline lowercased mid-sentence')
+assert.ok(withAward.includes('link is on your StudyMax screen'), 'points the student at the on-screen link')
+assert.ok(withAward.toLowerCase().includes('no need to answer'), 'tells the student up front it is one-way')
 
 const plural = buildCallScript({ specializationName: 'Algorithmics', coursesRemaining: 3 })
 assert.ok(plural.includes('3 courses away from the Algorithmics specialization'), 'plural course wording')
-assert.ok(!plural.includes('Also'), 'no award line when no award given')
+assert.ok(!plural.includes('link is on your StudyMax screen'), 'no link line when there is no award to link to')
 
 const done = buildCallScript({ specializationName: 'Social Computing', coursesRemaining: 0 })
 assert.ok(done.includes("You've completed the Social Computing specialization"), 'done state gets its own line, not "0 courses away"')

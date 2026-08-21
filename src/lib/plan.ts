@@ -44,7 +44,9 @@ function unmetPrerequisites(code: string, satisfied: Set<string>): string[][] {
 }
 
 /**
- * Picks the concrete courses that close out `match`'s unsatisfied requirement slots.
+ * Picks the concrete courses that close out the unsatisfied requirement slots of one target — or of
+ * several planned together, in which case a course shared between them is planned once and counted
+ * for each.
  *
  * Where a slot offers a choice ("CMPT260 or CMPT263"), the option that advances the most OTHER
  * specializations wins — that is the whole point: one course, two credentials. Ties break to the
@@ -54,39 +56,62 @@ function unmetPrerequisites(code: string, satisfied: Set<string>): string[][] {
  * other options left.
  */
 export function selectCourses(
-  match: SpecializationMatch,
+  target: SpecializationMatch | SpecializationMatch[],
   allSpecializations: Specialization[],
   completed: Set<string>,
 ): PlannedCourse[] {
+  const targets = Array.isArray(target) ? target : [target]
   const overlap = computeCourseOverlap(allSpecializations, completed)
   const overlapByCourse = new Map(overlap.map((o) => [o.course, o.specs]))
 
-  const otherSpecCount = (code: string) =>
-    (overlapByCourse.get(code) ?? []).filter((s) => s.id !== match.spec.id).length
+  const otherSpecCount = (code: string, specId: string) =>
+    (overlapByCourse.get(code) ?? []).filter((s) => s.id !== specId).length
 
   const picked: PlannedCourse[] = []
-  const takenCodes = new Set<string>()
+  const pickedCodes = new Set<string>()
+  // One course fills a slot in every target at once — that is the whole point of planning several
+  // together — but never two slots of the SAME target, which would double-count it.
+  const claimed = new Map<string, Set<string>>()
+  const claimedBy = (specId: string) => {
+    if (!claimed.has(specId)) claimed.set(specId, new Set())
+    return claimed.get(specId)!
+  }
 
-  const slots = [...match.unsatisfied].sort((a, b) => a.options.length - b.options.length)
+  const slots = targets
+    .flatMap((t) => t.unsatisfied.map((slot) => ({ ...slot, specId: t.spec.id })))
+    .sort((a, b) => a.options.length - b.options.length)
 
   for (const slot of slots) {
+    const mine = claimedBy(slot.specId)
+
+    // A course another target already put in the plan counts for this slot too — for free.
+    let need = slot.need
+    for (const code of slot.options) {
+      if (need === 0) break
+      if (!pickedCodes.has(code) || mine.has(code)) continue
+      mine.add(code)
+      need--
+    }
+    if (need === 0) continue
+
     const ranked = slot.options
-      .filter((code) => !takenCodes.has(code))
+      .filter((code) => !pickedCodes.has(code))
       .sort(
         (a, b) =>
-          otherSpecCount(b) - otherSpecCount(a) ||
+          otherSpecCount(b, slot.specId) - otherSpecCount(a, slot.specId) ||
           unmetPrerequisites(a, completed).length - unmetPrerequisites(b, completed).length ||
           courseLevel(a) - courseLevel(b) ||
           a.localeCompare(b),
       )
 
-    for (const code of ranked.slice(0, slot.need)) {
-      takenCodes.add(code)
+    for (const code of ranked.slice(0, need)) {
+      mine.add(code)
+      pickedCodes.add(code)
       picked.push({
         code,
         reason: 'requirement',
         alsoAdvances: (overlapByCourse.get(code) ?? [])
-          .filter((s) => s.id !== match.spec.id)
+          .filter((s) => s.id !== slot.specId)
           .map((s) => s.name),
       })
     }
@@ -180,7 +205,7 @@ function nextTerm({ season, year }: TermStart): TermStart {
  * same term as (or before) one of its prerequisites.
  */
 export function buildPlan(
-  match: SpecializationMatch,
+  target: SpecializationMatch | SpecializationMatch[],
   allSpecializations: Specialization[],
   completed: Set<string>,
   coursesPerTerm: number,
@@ -188,7 +213,7 @@ export function buildPlan(
   { includePrerequisites = true }: { includePrerequisites?: boolean } = {},
 ): PlannedTerm[] {
   const perTerm = Math.max(1, Math.floor(coursesPerTerm))
-  const picked = selectCourses(match, allSpecializations, completed)
+  const picked = selectCourses(target, allSpecializations, completed)
   const withPrereqs = includePrerequisites ? withPrerequisites(picked, completed) : picked
   const ordered = topologicalOrder(withPrereqs, completed)
 

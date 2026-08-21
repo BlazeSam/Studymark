@@ -18,6 +18,17 @@ assert.deepEqual(
   'nearest deadline first, rolling entries last (alphabetical among ties)',
 )
 
+// A deadline that has already passed must not outrank a live one — it is closed, not urgent.
+const withExpired: Resource[] = [
+  { id: 'expired', name: 'Expired', whatItIs: 'test', whyRelevant: 'test', deadline: 'gone', deadlineDate: '2000-01-01' },
+  ...fixtures,
+]
+assert.deepEqual(
+  rankByUrgency(withExpired).map((r) => r.id),
+  ['a', 'b', 'c', 'd', 'expired'],
+  'expired deadlines sort last, behind even rolling entries',
+)
+
 assert.equal(daysUntil({ id: 'x', name: 'x', whatItIs: '', whyRelevant: '', deadline: '' }), null, 'no deadlineDate → null')
 
 const past = daysUntil({ id: 'x', name: 'x', whatItIs: '', whyRelevant: '', deadline: '', deadlineDate: '2000-01-01' })

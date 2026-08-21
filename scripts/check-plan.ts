@@ -128,6 +128,41 @@ assert.equal(
   'without prerequisite expansion, every outstanding course lands in some term and nothing else does',
 )
 
+// --- several targets in one plan: shared courses are planned once and counted for both ---
+const two = matches.filter((m) => m.remaining > 0).slice(0, 2)
+assert.equal(two.length, 2, 'sample transcript should leave at least two specializations outstanding')
+const [a, b] = two
+const combined = selectCourses(two, specializations, completed)
+const aAlone = selectCourses(a, specializations, completed)
+const bAlone = selectCourses(b, specializations, completed)
+
+assert.equal(
+  new Set(combined.map((c) => c.code)).size,
+  combined.length,
+  'a course shared by both targets is planned once, not twice',
+)
+assert.ok(
+  combined.length <= aAlone.length + bAlone.length,
+  'planning together never costs more than planning separately',
+)
+// Every slot of every target is still covered: each target needs `remaining` of its own courses.
+for (const target of two) {
+  const claimable = target.unsatisfied.reduce((sum, slot) => {
+    const have = slot.options.filter((o) => combined.some((c) => c.code === o)).length
+    return sum + Math.min(slot.need, have)
+  }, 0)
+  assert.equal(claimable, target.remaining, `${target.spec.id}: every outstanding slot is covered by the joint plan`)
+}
+assert.ok(
+  buildPlan(two, specializations, completed, 2, { season: 'Fall', year: 2026 }).every((t) => t.courses.length <= 2),
+  'joint plan still respects the per-term cap',
+)
+assert.deepEqual(
+  selectCourses([a], specializations, completed).map((c) => c.code),
+  aAlone.map((c) => c.code),
+  'a one-element array plans identically to a bare match',
+)
+
 // --- degrades, never throws ---
 const done = matches.find((m) => m.remaining === 0)
 if (done) assert.deepEqual(buildPlan(done, specializations, completed, 3, { season: 'Fall', year: 2026 }), [])

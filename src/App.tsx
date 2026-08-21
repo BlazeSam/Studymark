@@ -87,9 +87,13 @@ function courseCode(code: string) {
   return code.replace(/([A-Z]+)(\d+)/, '$1 $2')
 }
 
+// Arts & Science courses only, grouped by subject — the college this app's programs live in. The
+// rest of USask's catalogue stays reachable through search, not this list.
+const AS_SUBJECT_CODES = new Set(artsAndScienceSubjects.map((s) => s.code))
 const COURSES_BY_SUBJECT = new Map<string, typeof catalogueCourses>()
 for (const course of catalogueCourses) {
   const subject = course.code.match(/^[A-Z]+/)?.[0] ?? ''
+  if (!AS_SUBJECT_CODES.has(subject)) continue
   const list = COURSES_BY_SUBJECT.get(subject)
   if (list) list.push(course)
   else COURSES_BY_SUBJECT.set(subject, [course])
@@ -337,6 +341,7 @@ function App() {
 
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle')
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [uploadInProgress, setUploadInProgress] = useState<string[]>([])
 
   async function handleTranscriptUpload(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -355,11 +360,10 @@ function App() {
       }
 
       const pdfBase64 = await fileToBase64(file)
-      const knownCourseCodes = Object.keys(selectedProgram.courseTitles)
       const res = await fetch('/api/parse-transcript', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ pdfBase64, knownCourseCodes }),
+        body: JSON.stringify({ pdfBase64 }),
       })
 
       if (res.status === 404) {
@@ -378,17 +382,19 @@ function App() {
       }
 
       const data = await res.json()
-      const codes: string[] = data.completedCourses ?? []
+      const codes: string[] = data.completed ?? []
+      const inProgressCodes: string[] = data.inProgress ?? []
       if (codes.length === 0) {
         throw new UploadError(
           data.sawText === false
             ? 'That PDF has no readable text — a scan or photo needs to be exported as text, or entered below.'
-            : `We read the file but found none of ${selectedProgram.name}'s courses in it. ` +
+            : "We read the file but couldn't find any recognizable completed courses in it. " +
               'If it was the right transcript, add the courses below.',
         )
       }
 
       setCompleted(new Set(codes))
+      setUploadInProgress(inProgressCodes)
       setHeroId(null)
       setUploadStatus('success')
     } catch (err) {
@@ -405,14 +411,31 @@ function App() {
 
   // --- term-by-term path to the closest specialization ---
   const [coursesPerTerm, setCoursesPerTerm] = useState(2)
+  // Extra targets the student added to the same plan. Only ids from what they're already close to;
+  // an id that stops resolving (they switched program) simply drops out.
+  const [extraTargetIds, setExtraTargetIds] = useState<string[]>([])
+  const addableTargets = useMemo(
+    () =>
+      [...matches, ...credentials].filter(
+        (m) => m.remaining > 0 && m.spec.id !== hero.spec.id && !extraTargetIds.includes(m.spec.id),
+      ),
+    [matches, credentials, hero, extraTargetIds],
+  )
+  const targets = useMemo(() => {
+    const byId = new Map([...matches, ...credentials].map((m) => [m.spec.id, m]))
+    return [hero, ...extraTargetIds.map((id) => byId.get(id)).filter((m) => m !== undefined)].filter(
+      (m) => m.remaining > 0,
+    )
+  }, [hero, matches, credentials, extraTargetIds])
   const plan = useMemo(
     () =>
-      hero.remaining > 0
-        ? buildPlan(hero, planningSpecs, completed, coursesPerTerm, upcomingTerm(today))
-        : [],
-    [hero, planningSpecs, completed, coursesPerTerm, today],
+      targets.length > 0 ? buildPlan(targets, planningSpecs, completed, coursesPerTerm, upcomingTerm(today)) : [],
+    [targets, planningSpecs, completed, coursesPerTerm, today],
   )
   const [planCopied, setPlanCopied] = useState(false)
+  // Clipboard writes are blocked in some browsers and contexts. Rather than a button that appears to
+  // do nothing, the plan text is shown for the student to select by hand.
+  const [planText, setPlanText] = useState<string | null>(null)
 
   const hiddenPrereqs = useMemo(
     () => plan.flatMap((t) => t.courses).filter((c) => c.reason === 'prerequisite'),
@@ -420,9 +443,10 @@ function App() {
   )
 
   async function copyPlan() {
+    const required = plan.flatMap((t) => t.courses).filter((c) => c.reason === 'requirement').length
     const lines = [
-      `StudyMax plan — ${hero.spec.name} (${selectedProgram?.name ?? ''})`,
-      `${hero.remaining} required course${hero.remaining === 1 ? '' : 's'} outstanding` +
+      `StudyMax plan — ${targets.map((t) => t.spec.name).join(' + ')} (${selectedProgram?.name ?? ''})`,
+      `${required} required course${required === 1 ? '' : 's'} outstanding` +
         (hiddenPrereqs.length > 0
           ? `, plus ${hiddenPrereqs.length} prerequisite${hiddenPrereqs.length === 1 ? '' : 's'} not listed on the specialization page`
           : '') +
@@ -441,7 +465,14 @@ function App() {
       '',
       'Prerequisites and sequencing from catalogue.usask.ca. Confirm course offerings by term with an advisor.',
     ]
-    await navigator.clipboard.writeText(lines.join('\n'))
+    const text = lines.join('\n')
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      setPlanText(text)
+      return
+    }
+    setPlanText(null)
     setPlanCopied(true)
     setTimeout(() => setPlanCopied(false), 2000)
   }
@@ -515,20 +546,26 @@ function App() {
   }
 
   // --- additive: one-way scripted phone reminder (does not read or affect lookup/resources state) ---
-  const topAward = useMemo(() => rankByUrgency(usask.resources)[0], [])
+  const topAward = useMemo(() => rankByUrgency(usask.resources, today)[0], [today])
   const topAwardDeadlineText = useMemo(() => {
     if (!topAward) return undefined
     const days = daysUntil(topAward, today)
     return days !== null ? formatCountdown(days) : topAward.deadline
   }, [topAward, today])
+  // The call reads the deadline aloud mid-sentence, so it only gets a real countdown — a raw date
+  // string ("May 20, 2026") or a "not listed" note would be spoken as nonsense.
+  const spokenDeadline = useMemo(
+    () => (topAward && daysUntil(topAward, today) !== null ? topAwardDeadlineText : undefined),
+    [topAward, today, topAwardDeadlineText],
+  )
   const callContext: CallContext = useMemo(
     () => ({
       specializationName: hero.spec.name,
       coursesRemaining: hero.remaining,
       awardName: topAward?.name,
-      awardDeadlineText: topAwardDeadlineText,
+      awardDeadlineText: spokenDeadline,
     }),
-    [hero, topAward, topAwardDeadlineText],
+    [hero, topAward, spokenDeadline],
   )
   const callFallbackScript = useMemo(() => buildCallScript(callContext), [callContext])
 
@@ -653,7 +690,11 @@ function App() {
                   {uploadStatus === 'uploading' && <p className="hint">Reading your transcript…</p>}
                   {uploadStatus === 'success' && (
                     <p className="upload-status upload-status--success">
-                      ✓ Found {completed.size} completed course{completed.size === 1 ? '' : 's'} — review below.
+                      ✓ Found {completed.size} completed course{completed.size === 1 ? '' : 's'}
+                      {uploadInProgress.length > 0
+                        ? ` and ${uploadInProgress.length} in progress (${uploadInProgress.map(courseCode).join(', ')})`
+                        : ''}{' '}
+                      — review below.
                     </p>
                   )}
                   {uploadStatus === 'error' && <p className="upload-status upload-status--error">{uploadError}</p>}
@@ -730,8 +771,8 @@ function App() {
                   <details className="subject-browser">
                     <summary>Or browse the Arts &amp; Science course list</summary>
                     <p className="hint">
-                      All {artsAndScienceSubjects.length} Arts &amp; Science subjects. Open one to tick off what you
-                      took — the rest stay closed.
+                      All {artsAndScienceSubjects.length} Arts &amp; Science subjects, closed. Open one to tick off what
+                      you took — same list as your courses above.
                     </p>
                     <ul className="subject-browser__subjects">
                       {artsAndScienceSubjects.map((subject) => {
@@ -743,11 +784,9 @@ function App() {
                               <summary>
                                 <span className="subject-browser__code">{subject.code}</span>
                                 <span className="subject-browser__name">{subject.name}</span>
-                                <span className="subject-browser__count">
-                                  {takenHere > 0 ? `${takenHere} taken` : `${subjectCourses.length} courses`}
-                                </span>
+                                {takenHere > 0 && <span className="subject-browser__count">{takenHere} ✓</span>}
                               </summary>
-                              <ul className="checklist">
+                              <ul className="checklist subject-browser__courses">
                                 {subjectCourses.map((c) => (
                                   <CourseCheck
                                     key={c.code}
@@ -805,12 +844,6 @@ function App() {
           <button type="button" className="btn intake__reveal" disabled={!selectedProgram} onClick={() => setRevealed(true)}>
             Reveal what my school hides
           </button>
-          <p className="intake__sample-line">
-            Don&rsquo;t have your transcript handy?{' '}
-            <button type="button" className="linkish" onClick={loadSampleStudent}>
-              Load sample student data (USask CS)
-            </button>
-          </p>
         </section>
 
         {revealed && selectedProgram && (
@@ -864,7 +897,9 @@ function App() {
                 {plan.length > 0 && (
                   <section className="section section--band plan" data-band="lavender">
                     <div className="plan__head">
-                      <h2 className="section__title">Your path to {hero.spec.name}</h2>
+                      <h2 className="section__title">
+                        Your path to {targets.map((t) => t.spec.name).join(' + ')}
+                      </h2>
                       <label className="plan__control">
                         <span>Courses per term</span>
                         <select
@@ -879,6 +914,47 @@ function App() {
                           ))}
                         </select>
                       </label>
+                    </div>
+                    <div className="plan__targets">
+                      <div className="chips">
+                        {targets.map((t) => (
+                          <span key={t.spec.id} className="chip">
+                            {t.spec.name}
+                            {t.spec.id !== hero.spec.id && (
+                              <button
+                                type="button"
+                                className="chip__remove"
+                                aria-label={`Remove ${t.spec.name} from this plan`}
+                                onClick={() =>
+                                  setExtraTargetIds((ids) => ids.filter((id) => id !== t.spec.id))
+                                }
+                              >
+                                ×
+                              </button>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                      {addableTargets.length > 0 && (
+                        <label className="plan__control">
+                          <span className="sr-only">Add another target to this plan</span>
+                          <select
+                            className="resources__input"
+                            value=""
+                            onChange={(e) => {
+                              const id = e.target.value
+                              if (id) setExtraTargetIds((ids) => [...ids, id])
+                            }}
+                          >
+                            <option value="">+ Add another one you&rsquo;re close to…</option>
+                            {addableTargets.map((m) => (
+                              <option key={m.spec.id} value={m.spec.id}>
+                                {m.spec.name} — {m.remaining} left
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
                     </div>
                     <p className="hint">
                       Finishes in {plan.length} term{plan.length === 1 ? '' : 's'} — by{' '}
@@ -942,6 +1018,14 @@ function App() {
                         {planCopied ? '✓ Copied' : 'Copy plan for my advisor'}
                       </button>
                     </div>
+                    {planText !== null && (
+                      <>
+                        <p className="hint">
+                          Your browser blocked the copy — select the plan below and copy it yourself.
+                        </p>
+                        <textarea className="plan__fallback" readOnly rows={8} value={planText} />
+                      </>
+                    )}
                     <p className="plan__caveat">
                       Prerequisites come from catalogue.usask.ca verbatim; nothing here is inferred. What we
                       can&rsquo;t know is which terms a course is actually offered in — confirm that with your advisor
@@ -1078,7 +1162,7 @@ function App() {
                   </p>
                 ) : (
                   <ol className="resources__list">
-                    {rankByUrgency(lookup.school.resources).map((r) => {
+                    {rankByUrgency(lookup.school.resources, today).map((r) => {
                       const days = daysUntil(r, today)
                       const tier = urgencyTier(days)
                       const countdown = formatCountdown(days)
@@ -1136,12 +1220,34 @@ function App() {
             </section>
 
             {hasProgramData && (
-              <section className="section call">
-                <h2 className="section__title">Get a call about this</h2>
-                <p className="hint">
-                  One scripted call about your #1 specialization{topAward ? ' and your most urgent award' : ''} — no
-                  conversation, just the reminder, then it hangs up.
+              <section className="section section--band call" data-band="pear">
+                <p className="call__lead">
+                  You&rsquo;ve seen what you&rsquo;re missing and how to reach it — let StudyMax call you before it
+                  slips away.
                 </p>
+                <h2 className="section__title">Last step: get the call</h2>
+                <p className="hint">
+                  Nobody re-opens a dashboard. So StudyMax phones you once about {topAward ? 'a real award with a ' : ''}
+                  {topAward ? <strong>near deadline</strong> : 'your closest specialization'}, says its piece, and hangs
+                  up. One way — no conversation, nothing to answer.
+                </p>
+
+                {topAward && (
+                  <div className="call__award">
+                    <p className="call__award-countdown">
+                      {topAwardDeadlineText ?? topAward.deadline}
+                    </p>
+                    <h3 className="call__award-name">{topAward.name}</h3>
+                    {topAward.value && <p className="call__award-value">{topAward.value}</p>}
+                    <p className="call__award-what">{topAward.whatItIs}</p>
+                  </div>
+                )}
+
+                <details className="call__script">
+                  <summary>Exactly what the call will say</summary>
+                  <p className="call__script-text">&ldquo;{callFallbackScript}&rdquo;</p>
+                </details>
+
                 <form className="call__form" onSubmit={handleCallMe}>
                   <input
                     type="tel"
@@ -1153,7 +1259,7 @@ function App() {
                     required
                   />
                   <button type="submit" className="btn" disabled={callStatus === 'calling'}>
-                    📞 Call me about this
+                    {topAward ? `📞 Call me about the ${topAward.name.split(/[,(]/)[0].trim()}` : '📞 Call me about this'}
                   </button>
                 </form>
                 {callStatus === 'calling' && <p className="hint">Calling…</p>}
@@ -1164,6 +1270,26 @@ function App() {
                     {callFallbackScript}&rdquo;
                   </p>
                 )}
+
+                {/* A phone call can't carry a URL, and Bland's SMS API is Enterprise-only, so the link
+                    lives here — shown whether the call rang, failed, or was never placed at all. */}
+                {topAward && (
+                  <div className="call__link">
+                    <p className="call__link-label">
+                      {callStatus === 'success'
+                        ? 'The call can’t hand you a link — so here it is:'
+                        : 'Either way, here’s the link the call points at:'}
+                    </p>
+                    <a className="call__link-url" href={topAward.url} target="_blank" rel="noreferrer">
+                      {topAward.name}
+                      <span className="external-mark" aria-hidden>
+                        {' ↗'}
+                      </span>
+                      <span className="sr-only"> (opens the award page)</span>
+                    </a>
+                    <p className="call__link-deadline">{topAwardDeadlineText ?? topAward.deadline}</p>
+                  </div>
+                )}
               </section>
             )}
           </>
@@ -1173,6 +1299,13 @@ function App() {
       <footer className="footer">
         <p className="footer__statement">Built for one student, one transcript, one plan.</p>
         <p className="footer__meta">StudyMax</p>
+        {/* Demo data lives down here, out of the way of a real student's own intake. */}
+        <p className="footer__sample">
+          Just looking around?{' '}
+          <button type="button" className="linkish" onClick={loadSampleStudent}>
+            Load sample student data (USask CS)
+          </button>
+        </p>
       </footer>
     </div>
   )

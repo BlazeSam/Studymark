@@ -76,10 +76,18 @@ export function catalogueTitle(code: string): string | undefined {
   return titlesByCode.get(code)
 }
 
+/** The catalogue's own search page. Always live, so it is the safe landing spot. */
+export const CATALOGUE_HOME = 'https://catalogue.usask.ca/'
+
 /**
  * The catalogue's public page for a course, e.g. CMPT384 -> catalogue.usask.ca/CMPT-384.
  * That URL shape is the catalogue's own: it links courses to itself this way.
+ *
+ * Codes the catalogue no longer lists (retired courses that survive in a program page's prose, or
+ * in a prerequisite line) 404 at that address, so they fall back to the catalogue's search page —
+ * a student following a link never lands on a dead one.
  */
 export function catalogueUrl(code: string): string {
+  if (!titlesByCode.has(code)) return CATALOGUE_HOME
   return `https://catalogue.usask.ca/${code.replace(/^([A-Z]+)(\d+)$/, '$1-$2')}`
 }

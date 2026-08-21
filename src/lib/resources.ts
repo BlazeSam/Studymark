@@ -1,13 +1,20 @@
 import type { Resource } from '../data/schools/types.ts'
 
-/** Ranks resources by nearest deadline first. Rolling/ongoing (no deadlineDate) sort last. */
-export function rankByUrgency(resources: Resource[]): Resource[] {
-  return [...resources].sort((a, b) => {
-    if (!a.deadlineDate && !b.deadlineDate) return a.name.localeCompare(b.name)
-    if (!a.deadlineDate) return 1
-    if (!b.deadlineDate) return -1
-    return a.deadlineDate.localeCompare(b.deadlineDate)
-  })
+/**
+ * Ranks resources by nearest deadline first. Rolling/ongoing (no deadlineDate) sort last — and so do
+ * deadlines that have already passed, which are the one thing worse than no date: a closed award at
+ * the top of the list reads as the most urgent thing on the page.
+ */
+export function rankByUrgency(resources: Resource[], today: Date = new Date()): Resource[] {
+  // 0 = still open and dated, 1 = rolling/ongoing, 2 = the deadline has already gone by.
+  const tier = (r: Resource) => (daysUntil(r, today) !== null ? 0 : r.deadlineDate ? 2 : 1)
+
+  return [...resources].sort(
+    (a, b) =>
+      tier(a) - tier(b) ||
+      (tier(a) === 0 ? a.deadlineDate!.localeCompare(b.deadlineDate!) : 0) ||
+      a.name.localeCompare(b.name),
+  )
 }
 
 /** Days from `today` until the resource's deadline. null for rolling/ongoing or past deadlines. */

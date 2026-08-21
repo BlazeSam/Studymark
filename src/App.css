@@ -1308,9 +1308,9 @@ a.plan__course-name:hover,
   white-space: nowrap;
 }
 
-/* ---------- sample-data shortcut, demoted below the reveal ---------- */
+/* ---------- sample-data shortcut, parked in the footer ---------- */
 
-.intake__sample-line {
+.footer__sample {
   margin-top: var(--space-sm);
   font-size: var(--text-sm);
   color: var(--color-ink-2);
@@ -1327,12 +1327,6 @@ a.plan__course-name:hover,
   text-underline-offset: 0.15em;
 }
 
-/* ---------- Arts & Science subject browser ---------- */
-
-.subject-browser {
-  margin-bottom: var(--space-md);
-}
-
 .subject-browser > summary,
 .intake__manual > summary {
   cursor: pointer;
@@ -1340,27 +1334,35 @@ a.plan__course-name:hover,
   font-size: var(--text-md);
 }
 
+/* ---------- Arts & Science subject browser ---------- */
+
+.subject-browser {
+  margin-bottom: var(--space-md);
+}
+
+/* 58 subjects as collapsed rows. In columns they all fit on one screen, so opening a subject is a
+   click rather than a scroll hunt. */
 .subject-browser__subjects {
   list-style: none;
   padding: 0;
   margin-top: var(--space-2xs);
-  /* Every subject collapsed is one row each, so the whole list stays a short scroll. */
-  max-height: 24rem;
-  overflow-y: auto;
   border-radius: var(--radius-input);
   background: var(--color-paper);
+  columns: 4 11rem;
+  column-gap: 0;
 }
 
-.subject-browser__subjects > li + li {
+.subject-browser__subjects > li {
+  break-inside: avoid;
   border-top: 1px solid color-mix(in oklch, var(--color-ink) 8%, transparent);
 }
 
 .subject-browser__subjects summary {
   display: grid;
-  grid-template-columns: 4rem 1fr auto;
+  grid-template-columns: 3.2rem 1fr auto;
   align-items: baseline;
-  gap: var(--space-2xs);
-  padding: var(--space-2xs) var(--space-xs);
+  gap: var(--space-3xs);
+  padding: 0.1rem var(--space-2xs);
   cursor: pointer;
 }
 
@@ -1370,11 +1372,14 @@ a.plan__course-name:hover,
 
 .subject-browser__code {
   font-family: var(--font-mono);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
 }
 
 .subject-browser__name {
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .subject-browser__count {
@@ -1384,8 +1389,22 @@ a.plan__course-name:hover,
   white-space: nowrap;
 }
 
-.subject-browser__subjects .checklist {
-  padding: var(--space-2xs) var(--space-xs) var(--space-xs) var(--space-md);
+/* A phone fits one column, and 58 rows of it is a long scroll — so cap the box there. Columns are
+   dropped first: a multi-column box with a max-height overflows sideways, hiding the rest. */
+@media (max-width: 640px) {
+  .subject-browser__subjects {
+    columns: auto;
+    max-height: 22rem;
+    overflow-y: auto;
+  }
+}
+
+/* An open subject keeps its own courses in a capped, scrollable box so the columns around it don't
+   stretch down the page. */
+.subject-browser__courses {
+  max-height: 16rem;
+  overflow-y: auto;
+  padding: var(--space-3xs) var(--space-2xs) var(--space-2xs) var(--space-sm);
 }
 
 /* ---------- course search: results persist across adds ---------- */
@@ -1402,4 +1421,126 @@ a.plan__course-name:hover,
   position: sticky;
   bottom: 0;
   background: var(--color-paper);
+}
+
+/* ---------- plan targets (several specializations/certificates in one plan) ---------- */
+
+.plan__targets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.plan__targets .chips {
+  margin-top: 0;
+}
+
+.chip__remove {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  line-height: 1;
+  padding: 0 0 0 0.4em;
+  opacity: 0.6;
+}
+
+.chip__remove:hover {
+  opacity: 1;
+}
+
+.plan__fallback {
+  width: 100%;
+  margin-top: var(--space-2xs);
+  padding: var(--space-2xs);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  border-radius: var(--radius-input);
+  border: 1px solid color-mix(in oklch, var(--color-ink) 20%, transparent);
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+/* ---------- call: the closing beat of the flow ---------- */
+
+.call__lead {
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  color: var(--color-ink);
+  margin-bottom: var(--space-2xs);
+  max-width: 44ch;
+}
+
+.call__award {
+  margin-top: var(--space-sm);
+  padding: var(--space-sm);
+  border-radius: var(--radius-input);
+  background: var(--color-paper);
+}
+
+.call__award-countdown {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-ink-2);
+}
+
+.call__award-name {
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  margin-top: var(--space-3xs);
+}
+
+.call__award-value,
+.call__award-what {
+  font-size: var(--text-sm);
+  color: var(--color-ink-2);
+  margin-top: var(--space-3xs);
+}
+
+.call__script > summary {
+  cursor: pointer;
+  font-size: var(--text-sm);
+  margin-top: var(--space-sm);
+}
+
+.call__script-text {
+  margin-top: var(--space-2xs);
+  padding: var(--space-2xs);
+  border-left: 3px solid var(--color-accent);
+  background: var(--color-paper);
+  font-size: var(--text-sm);
+  font-style: italic;
+}
+
+/* The guaranteed fallback: a phone call can't deliver a URL, so the screen always does. */
+.call__link {
+  margin-top: var(--space-sm);
+  padding: var(--space-sm);
+  border-radius: var(--radius-input);
+  border: 2px solid var(--color-ink);
+  background: var(--color-paper);
+}
+
+.call__link-label {
+  font-size: var(--text-sm);
+  color: var(--color-ink-2);
+}
+
+.call__link-url {
+  display: inline-block;
+  margin-top: var(--space-3xs);
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  color: var(--color-ink);
+}
+
+.call__link-deadline {
+  margin-top: var(--space-3xs);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-ink-2);
 }

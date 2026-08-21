@@ -17,6 +17,21 @@ export const usask: School = {
   resources: [
     // --- University-wide (open to any continuing undergrad, not CS-specific) ---
     {
+      // Verified on students.usask.ca on 2026-08-21: "October 1st is the deadline to apply for most
+      // bursaries offered by the university", and the award search lists the application window as
+      // "Continuing Bursaries (available Aug 15 - Oct 1)". One application, hundreds of bursaries.
+      id: 'continuing-bursaries-application',
+      url: 'https://students.usask.ca/money/awards/undergraduate-awards.php',
+      name: 'Continuing Student Bursary application',
+      value: 'Varies by bursary',
+      deadline: 'October 1, 2026',
+      deadlineDate: '2026-10-01',
+      whatItIs:
+        'The single application that puts you in the running for most USask bursaries — the form opens August 15 and closes October 1.',
+      whyRelevant:
+        'One form, one deadline, and it is how the majority of university bursaries are awarded. Missing it costs a year.',
+    },
+    {
       id: 'rhodes-scholarship',
       url: 'https://students.usask.ca/money/awards/undergraduate-awards.php?award=EX0133C',
       name: 'Rhodes Scholarships',
@@ -103,85 +118,89 @@ export const usask: School = {
       whyRelevant: 'External/national award — separate applicant pool from USask-only scholarships.',
     },
 
-    // --- Computer Science department (paws2.usask.ca/compsci/awards.php) ---
-    // The department page lists names only — no deadlines or values. Real awards, thin metadata.
+    // --- Computer Science department awards ---
+    // The department's own list lives at paws2.usask.ca/compsci/awards.php, which redirects a
+    // signed-out visitor to the PAWS login wall — a dead end for anyone reading this page. These
+    // awards are also absent from the university-wide award search (verified 2026-08-21: a keyword
+    // search for "Tremblay" returns nothing), so the link goes to the College of Arts & Science
+    // scholarships page, which is public and is the college these awards are administered under.
     {
       id: 'cs-alumni-award',
-      url: 'https://paws2.usask.ca/compsci/awards.php',
+      url: 'https://artsandscience.usask.ca/students/scholarships.php',
       name: 'Alumni Award',
-      deadline: 'Not listed — check the CS department awards page',
+      deadline: 'Not listed — the CS department page needs a PAWS login',
       whatItIs: 'Computer Science department award for undergraduate students.',
       whyRelevant: 'Administered directly by the CS department — far smaller applicant pool than university-wide scholarships.',
     },
     {
       id: 'bhupinder-kaur-basran-memorial-scholarship',
-      url: 'https://paws2.usask.ca/compsci/awards.php',
+      url: 'https://artsandscience.usask.ca/students/scholarships.php',
       name: 'Bhupinder Kaur Basran Memorial Scholarship',
-      deadline: 'Not listed — check the CS department awards page',
+      deadline: 'Not listed — the CS department page needs a PAWS login',
       whatItIs: 'Computer Science department award for undergraduate students.',
       whyRelevant: 'CS-department-specific — narrower pool than university-wide scholarships.',
     },
     {
       id: 'jp-tremblay-award',
-      url: 'https://paws2.usask.ca/compsci/awards.php',
+      url: 'https://artsandscience.usask.ca/students/scholarships.php',
       name: 'J. P. Tremblay Award',
-      deadline: 'Not listed — check the CS department awards page',
+      deadline: 'Not listed — the CS department page needs a PAWS login',
       whatItIs: 'Computer Science department award for undergraduate students.',
       whyRelevant: 'CS-department-specific — narrower pool than university-wide scholarships.',
     },
     {
       id: 'calian-advanced-technologies-scholarships',
-      url: 'https://paws2.usask.ca/compsci/awards.php',
+      url: 'https://artsandscience.usask.ca/students/scholarships.php',
       name: 'Calian, Advanced Technologies Scholarships',
-      deadline: 'Not listed — check the CS department awards page',
+      deadline: 'Not listed — the CS department page needs a PAWS login',
       whatItIs: 'Computer Science department award for undergraduate students, sponsored by Calian.',
       whyRelevant: 'Industry-sponsored — narrower pool than university-wide scholarships.',
     },
     {
       id: 'linda-carmichael-recognition-award',
-      url: 'https://paws2.usask.ca/compsci/awards.php',
+      url: 'https://artsandscience.usask.ca/students/scholarships.php',
       name: 'Linda Carmichael Recognition Award for Women in Computational Sciences',
-      deadline: 'Not listed — check the CS department awards page',
+      deadline: 'Not listed — the CS department page needs a PAWS login',
       whatItIs: 'Computer Science department award recognizing women in computational sciences.',
       whyRelevant: 'CS-department-specific — narrower pool than university-wide scholarships.',
     },
     {
       id: 'james-e-greer-undergraduate-research-prize',
-      url: 'https://paws2.usask.ca/compsci/awards.php',
+      url: 'https://artsandscience.usask.ca/students/scholarships.php',
       name: 'James E. Greer Teaching, Learning, and Technology Undergraduate Research Prize',
-      deadline: 'Not listed — check the CS department awards page',
+      deadline: 'Not listed — the CS department page needs a PAWS login',
       whatItIs: 'Computer Science department research prize for undergraduate students.',
       whyRelevant: 'CS-department-specific — narrower pool than university-wide scholarships.',
     },
     {
       id: 'rick-bunt-prize-computer-systems',
-      url: 'https://paws2.usask.ca/compsci/awards.php',
+      url: 'https://artsandscience.usask.ca/students/scholarships.php',
       name: 'Dr. Rick Bunt Prize in Computer Systems',
-      deadline: 'Not listed — check the CS department awards page',
+      deadline: 'Not listed — the CS department page needs a PAWS login',
       whatItIs: 'Computer Science department prize in computer systems.',
       whyRelevant: 'CS-department-specific — narrower pool than university-wide scholarships.',
     },
     {
       id: 'debra-lawrence-scholarship',
-      url: 'https://paws2.usask.ca/compsci/awards.php',
+      url: 'https://artsandscience.usask.ca/students/scholarships.php',
       name: 'The Debra Lawrence Scholarship',
-      deadline: 'Not listed — check the CS department awards page',
+      deadline: 'Not listed — the CS department page needs a PAWS login',
       whatItIs: 'Computer Science department award for undergraduate students.',
       whyRelevant: 'CS-department-specific — narrower pool than university-wide scholarships.',
     },
     {
       id: 'rahat-yasir-award-diversity-inclusion',
-      url: 'https://paws2.usask.ca/compsci/awards.php',
+      url: 'https://artsandscience.usask.ca/students/scholarships.php',
       name: 'Rahat Yasir Award for Diversity and Inclusion',
-      deadline: 'Not listed — check the CS department awards page',
+      deadline: 'Not listed — the CS department page needs a PAWS login',
       whatItIs: 'Computer Science department award recognizing diversity and inclusion.',
       whyRelevant: 'CS-department-specific — narrower pool than university-wide scholarships.',
     },
     {
       id: 'nserc-departmental-usra',
-      url: 'https://paws2.usask.ca/compsci/awards.php',
+      url: 'https://artsandscience.usask.ca/students/scholarships.php',
       name: 'NSERC and Departmental Undergraduate Student Research Awards (USRA)',
-      deadline: 'Not listed — check the CS department awards page',
+      deadline: 'Not listed — the CS department page needs a PAWS login',
       whatItIs: 'Funded undergraduate research award combining NSERC and CS department funding.',
       whyRelevant: 'A paid research opportunity, not just a scholarship — worth it even outside financial need.',
     },
