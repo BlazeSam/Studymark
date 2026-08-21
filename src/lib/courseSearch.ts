@@ -75,3 +75,11 @@ const titlesByCode = new Map(catalogueCourses.map((c) => [c.code, c.title]))
 export function catalogueTitle(code: string): string | undefined {
   return titlesByCode.get(code)
 }
+
+/**
+ * The catalogue's public page for a course, e.g. CMPT384 -> catalogue.usask.ca/CMPT-384.
+ * That URL shape is the catalogue's own: it links courses to itself this way.
+ */
+export function catalogueUrl(code: string): string {
+  return `https://catalogue.usask.ca/${code.replace(/^([A-Z]+)(\d+)$/, '$1-$2')}`
+}

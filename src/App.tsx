@@ -11,9 +11,9 @@ import type { Program } from './data/programs/types.ts'
 import { buildCallScript, type CallContext } from './lib/callScript.ts'
 import { buildPlan, upcomingTerm } from './lib/plan.ts'
 import { computeCredentials } from './lib/credentials.ts'
-import { searchCourses, catalogueTitle } from './lib/courseSearch.ts'
+import { searchCourses, catalogueTitle, catalogueUrl } from './lib/courseSearch.ts'
 import { courseInfo } from './data/prereqs.ts'
-import { catalogueCourses } from './data/courses.ts'
+import { catalogueCourses, artsAndScienceSubjects } from './data/courses.ts'
 import './App.css'
 
 function fileToBase64(file: File): Promise<string> {
@@ -78,6 +78,14 @@ function formatDate(date: Date) {
 
 function courseCode(code: string) {
   return code.replace(/([A-Z]+)(\d+)/, '$1 $2')
+}
+
+const COURSES_BY_SUBJECT = new Map<string, typeof catalogueCourses>()
+for (const course of catalogueCourses) {
+  const subject = course.code.match(/^[A-Z]+/)?.[0] ?? ''
+  const list = COURSES_BY_SUBJECT.get(subject)
+  if (list) list.push(course)
+  else COURSES_BY_SUBJECT.set(subject, [course])
 }
 
 function ProgressBar({ done, total }: { done: number; total: number }) {
@@ -260,18 +268,6 @@ function App() {
     return remainings.length > 0 ? { min: Math.min(...remainings), max: Math.max(...remainings) } : { min: 0, max: 0 }
   }, [rest])
 
-  const allRequirementCourses = useMemo(() => {
-    const codes = new Set<string>()
-    for (const m of matches) {
-      for (const g of m.spec.requirements) for (const c of g.courses) codes.add(c)
-    }
-    return [...codes].sort()
-  }, [matches])
-
-  const notTakenCourses = useMemo(
-    () => allRequirementCourses.filter((code) => !completed.has(code)),
-    [allRequirementCourses, completed],
-  )
   // Everything the student has, including courses added by search that this program never asks for
   // — those still count toward certificates, minors and other specializations.
   const takenCourses = useMemo(() => [...completed].sort(), [completed])
@@ -512,10 +508,7 @@ function App() {
       <main>
         <section className="section section--band intake" data-band="pear">
           <h2 className="section__title">Tell us about you</h2>
-          <p className="hint">Blank by default — or skip straight to an instant demo.</p>
-          <button type="button" className="btn intake__sample" onClick={loadSampleStudent}>
-            ⚡ Load sample student (USask CS)
-          </button>
+          <p className="hint">Start with your university, then your program.</p>
 
           <div className="step">
             <span className="step__badge" aria-hidden>
@@ -658,32 +651,56 @@ function App() {
                     )}
                   </div>
 
-                  <details className="intake__manual" open={uploadStatus === 'success' || uploadStatus === 'error'}>
-                    <summary>{takenCourses.length > 0 ? 'Review or edit detected courses' : 'Or pick from your program’s requirements'}</summary>
-                    <p className="hint">Toggle courses to explore how the ranking changes.</p>
-                    <ul className="checklist">
-                      {notTakenCourses.map((code) => (
-                        <CourseCheck
-                          key={code}
-                          label={courseLabel(code)}
-                          checked={false}
-                          onToggle={() => toggleCourse(code)}
-                        />
-                      ))}
+                  <details className="subject-browser">
+                    <summary>Or browse the Arts &amp; Science course list</summary>
+                    <p className="hint">
+                      All {artsAndScienceSubjects.length} Arts &amp; Science subjects. Open one to tick off what you
+                      took — the rest stay closed.
+                    </p>
+                    <ul className="subject-browser__subjects">
+                      {artsAndScienceSubjects.map((subject) => {
+                        const subjectCourses = COURSES_BY_SUBJECT.get(subject.code) ?? []
+                        const takenHere = subjectCourses.filter((c) => completed.has(c.code)).length
+                        return (
+                          <li key={subject.code}>
+                            <details>
+                              <summary>
+                                <span className="subject-browser__code">{subject.code}</span>
+                                <span className="subject-browser__name">{subject.name}</span>
+                                <span className="subject-browser__count">
+                                  {takenHere > 0 ? `${takenHere} taken` : `${subjectCourses.length} courses`}
+                                </span>
+                              </summary>
+                              <ul className="checklist">
+                                {subjectCourses.map((c) => (
+                                  <CourseCheck
+                                    key={c.code}
+                                    label={`${courseCode(c.code)} — ${c.title}`}
+                                    checked={completed.has(c.code)}
+                                    onToggle={() => toggleCourse(c.code)}
+                                  />
+                                ))}
+                              </ul>
+                            </details>
+                          </li>
+                        )
+                      })}
                     </ul>
-                    {takenCourses.length > 0 && (
-                      <details className="checklist__taken">
-                        <summary>
-                          ✓ {takenCourses.length} course{takenCourses.length === 1 ? '' : 's'} taken
-                        </summary>
-                        <ul className="checklist">
-                          {takenCourses.map((code) => (
-                            <CourseCheck key={code} label={courseLabel(code)} checked onToggle={() => toggleCourse(code)} />
-                          ))}
-                        </ul>
-                      </details>
-                    )}
                   </details>
+
+                  {takenCourses.length > 0 && (
+                    <details className="intake__manual" open={uploadStatus === 'success' || uploadStatus === 'error'}>
+                      <summary>
+                        ✓ {takenCourses.length} course{takenCourses.length === 1 ? '' : 's'} taken — review or edit
+                      </summary>
+                      <p className="hint">Untick anything that isn&rsquo;t yours.</p>
+                      <ul className="checklist">
+                        {takenCourses.map((code) => (
+                          <CourseCheck key={code} label={courseLabel(code)} checked onToggle={() => toggleCourse(code)} />
+                        ))}
+                      </ul>
+                    </details>
+                  )}
                 </>
               )}
             </div>
@@ -712,6 +729,12 @@ function App() {
           <button type="button" className="btn intake__reveal" disabled={!selectedProgram} onClick={() => setRevealed(true)}>
             Reveal what my school hides
           </button>
+          <p className="intake__sample-line">
+            Don&rsquo;t have your transcript handy?{' '}
+            <button type="button" className="linkish" onClick={loadSampleStudent}>
+              Load sample student data (USask CS)
+            </button>
+          </p>
         </section>
 
         {revealed && selectedProgram && (
@@ -804,7 +827,18 @@ function App() {
                           <ul className="plan__courses">
                             {term.courses.map((c) => (
                               <li key={c.code} className={`plan__course plan__course--${c.reason}`}>
-                                <span className="plan__course-name">{courseLabel(c.code)}</span>
+                                <a
+                                  className="plan__course-name"
+                                  href={catalogueUrl(c.code)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  {courseLabel(c.code)}
+                                  <span className="external-mark" aria-hidden>
+                                    {' ↗'}
+                                  </span>
+                                  <span className="sr-only"> (opens the USask catalogue)</span>
+                                </a>
                                 {c.reason === 'prerequisite' && (
                                   <span className="plan__prereq">
                                     Prerequisite for {courseCode(c.neededBy ?? '')}
@@ -976,7 +1010,14 @@ function App() {
                       return (
                         <li key={r.id} className={`resource-card resource-card--${tier}`}>
                           <p className="resource-card__countdown">{days !== null ? countdown : r.deadline}</p>
-                          <h3 className="resource-card__name">{r.name}</h3>
+                          <h3 className="resource-card__name">
+                            <a href={r.url} target="_blank" rel="noreferrer">
+                              {r.name}
+                              <span className="external-mark" aria-hidden>
+                                {' ↗'}
+                              </span>
+                            </a>
+                          </h3>
                           {r.value && <p className="resource-card__value">{r.value}</p>}
                           <p className="resource-card__what">{r.whatItIs}</p>
                           <p className="resource-card__why">{r.whyRelevant}</p>

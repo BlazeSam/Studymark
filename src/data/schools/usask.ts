@@ -18,6 +18,7 @@ export const usask: School = {
     // --- University-wide (open to any continuing undergrad, not CS-specific) ---
     {
       id: 'rhodes-scholarship',
+      url: 'https://students.usask.ca/money/awards/undergraduate-awards.php?award=EX0133C',
       name: 'Rhodes Scholarships',
       value: 'Varies',
       deadline: 'August 17 (annual)',
@@ -27,6 +28,7 @@ export const usask: School = {
     },
     {
       id: 'bates-extended-practicum',
+      url: 'https://students.usask.ca/money/awards/undergraduate-awards.php?award=300042CS01',
       name: 'Bates Award for Excellence in Extended Practicum',
       value: 'Not applicable (non-monetary)',
       deadline: 'First business day of February (Fall practicum) or last business day of April (Winter practicum)',
@@ -35,6 +37,7 @@ export const usask: School = {
     },
     {
       id: 'mccreath-aboriginal-student-award',
+      url: 'https://students.usask.ca/money/awards/undergraduate-awards.php?award=301690CB01',
       name: 'McCreath Aboriginal Student Award',
       value: '$10,000',
       deadline: 'Not listed on the award search — check the award page directly',
@@ -43,6 +46,7 @@ export const usask: School = {
     },
     {
       id: 'cfuw-saskatoon-scholarship',
+      url: 'https://students.usask.ca/money/awards/undergraduate-awards.php?award=EX0029C',
       name: 'Canadian Federation of University Women (CFUW) Saskatoon Inc. Scholarships',
       value: '$2,500',
       deadline: 'May 31 (annual)',
@@ -51,6 +55,7 @@ export const usask: School = {
     },
     {
       id: '3m-national-student-fellowship',
+      url: 'https://students.usask.ca/money/awards/undergraduate-awards.php?award=EX0365C',
       name: '3M National Student Fellowship',
       value: '$2,000 plus conference recognition (per USask listing)',
       deadline: 'November 15 (annual)',
@@ -61,6 +66,7 @@ export const usask: School = {
     },
     {
       id: 'orano-northern-saskatchewan-scholarship',
+      url: 'https://students.usask.ca/money/awards/undergraduate-awards.php?award=EX0009C',
       name: 'Orano Northern Saskatchewan Scholarship Program',
       value: '$4,000',
       deadline: 'July 31 (annual)',
@@ -69,6 +75,7 @@ export const usask: School = {
     },
     {
       id: 'saskatchewan-youth-from-care-bursary',
+      url: 'https://students.usask.ca/money/awards/undergraduate-awards.php?award=302257CS01',
       name: 'Saskatchewan Youth from Care Bursary',
       value: 'Full tuition & fees + living costs + books + $1,000 first-year support',
       deadline: 'Open until June 1',
@@ -78,6 +85,7 @@ export const usask: School = {
     },
     {
       id: 'mccall-macbain-scholarship',
+      url: 'https://students.usask.ca/money/awards/undergraduate-awards.php?award=EX0378C',
       name: 'McCall MacBain Scholarship',
       value: 'Not listed',
       deadline: 'September 21 (annual)',
@@ -86,6 +94,7 @@ export const usask: School = {
     },
     {
       id: 'rcaf-foundation-student-scholarships',
+      url: 'https://students.usask.ca/money/awards/undergraduate-awards.php?award=EX0382C',
       name: 'RCAF Foundation Student Scholarships',
       value: '$1,000',
       deadline: 'May 20, 2026',
@@ -98,6 +107,7 @@ export const usask: School = {
     // The department page lists names only — no deadlines or values. Real awards, thin metadata.
     {
       id: 'cs-alumni-award',
+      url: 'https://paws2.usask.ca/compsci/awards.php',
       name: 'Alumni Award',
       deadline: 'Not listed — check the CS department awards page',
       whatItIs: 'Computer Science department award for undergraduate students.',
@@ -105,6 +115,7 @@ export const usask: School = {
     },
     {
       id: 'bhupinder-kaur-basran-memorial-scholarship',
+      url: 'https://paws2.usask.ca/compsci/awards.php',
       name: 'Bhupinder Kaur Basran Memorial Scholarship',
       deadline: 'Not listed — check the CS department awards page',
       whatItIs: 'Computer Science department award for undergraduate students.',
@@ -112,6 +123,7 @@ export const usask: School = {
     },
     {
       id: 'jp-tremblay-award',
+      url: 'https://paws2.usask.ca/compsci/awards.php',
       name: 'J. P. Tremblay Award',
       deadline: 'Not listed — check the CS department awards page',
       whatItIs: 'Computer Science department award for undergraduate students.',
@@ -119,6 +131,7 @@ export const usask: School = {
     },
     {
       id: 'calian-advanced-technologies-scholarships',
+      url: 'https://paws2.usask.ca/compsci/awards.php',
       name: 'Calian, Advanced Technologies Scholarships',
       deadline: 'Not listed — check the CS department awards page',
       whatItIs: 'Computer Science department award for undergraduate students, sponsored by Calian.',
@@ -126,6 +139,7 @@ export const usask: School = {
     },
     {
       id: 'linda-carmichael-recognition-award',
+      url: 'https://paws2.usask.ca/compsci/awards.php',
       name: 'Linda Carmichael Recognition Award for Women in Computational Sciences',
       deadline: 'Not listed — check the CS department awards page',
       whatItIs: 'Computer Science department award recognizing women in computational sciences.',
@@ -133,6 +147,7 @@ export const usask: School = {
     },
     {
       id: 'james-e-greer-undergraduate-research-prize',
+      url: 'https://paws2.usask.ca/compsci/awards.php',
       name: 'James E. Greer Teaching, Learning, and Technology Undergraduate Research Prize',
       deadline: 'Not listed — check the CS department awards page',
       whatItIs: 'Computer Science department research prize for undergraduate students.',
@@ -140,6 +155,7 @@ export const usask: School = {
     },
     {
       id: 'rick-bunt-prize-computer-systems',
+      url: 'https://paws2.usask.ca/compsci/awards.php',
       name: 'Dr. Rick Bunt Prize in Computer Systems',
       deadline: 'Not listed — check the CS department awards page',
       whatItIs: 'Computer Science department prize in computer systems.',
@@ -147,6 +163,7 @@ export const usask: School = {
     },
     {
       id: 'debra-lawrence-scholarship',
+      url: 'https://paws2.usask.ca/compsci/awards.php',
       name: 'The Debra Lawrence Scholarship',
       deadline: 'Not listed — check the CS department awards page',
       whatItIs: 'Computer Science department award for undergraduate students.',
@@ -154,6 +171,7 @@ export const usask: School = {
     },
     {
       id: 'rahat-yasir-award-diversity-inclusion',
+      url: 'https://paws2.usask.ca/compsci/awards.php',
       name: 'Rahat Yasir Award for Diversity and Inclusion',
       deadline: 'Not listed — check the CS department awards page',
       whatItIs: 'Computer Science department award recognizing diversity and inclusion.',
@@ -161,6 +179,7 @@ export const usask: School = {
     },
     {
       id: 'nserc-departmental-usra',
+      url: 'https://paws2.usask.ca/compsci/awards.php',
       name: 'NSERC and Departmental Undergraduate Student Research Awards (USRA)',
       deadline: 'Not listed — check the CS department awards page',
       whatItIs: 'Funded undergraduate research award combining NSERC and CS department funding.',

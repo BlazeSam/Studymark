@@ -11,6 +11,8 @@ export interface Resource {
   deadline: string
   /** ISO yyyy-mm-dd for sorting. Omit for rolling/ongoing resources — they sort last. */
   deadlineDate?: string
+  /** The page a student can actually read or apply on. Always a real published page. */
+  url: string
 }
 
 export interface School {

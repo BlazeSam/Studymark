@@ -1278,3 +1278,112 @@ select.resources__input {
     grid-column: 1 / -1;
   }
 }
+
+/* ---------- outbound links to the catalogue / award pages ---------- */
+
+a.plan__course-name,
+.resource-card__name a {
+  color: inherit;
+  text-decoration-color: color-mix(in oklch, currentColor 35%, transparent);
+  text-underline-offset: 0.15em;
+}
+
+a.plan__course-name:hover,
+.resource-card__name a:hover {
+  text-decoration-color: currentColor;
+}
+
+.external-mark {
+  font-size: 0.75em;
+  opacity: 0.6;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- sample-data shortcut, demoted below the reveal ---------- */
+
+.intake__sample-line {
+  margin-top: var(--space-sm);
+  font-size: var(--text-sm);
+  color: var(--color-ink-2);
+}
+
+.linkish {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+/* ---------- Arts & Science subject browser ---------- */
+
+.subject-browser {
+  margin-bottom: var(--space-md);
+}
+
+.subject-browser > summary,
+.intake__manual > summary {
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+}
+
+.subject-browser__subjects {
+  list-style: none;
+  padding: 0;
+  margin-top: var(--space-2xs);
+  /* Every subject collapsed is one row each, so the whole list stays a short scroll. */
+  max-height: 24rem;
+  overflow-y: auto;
+  border-radius: var(--radius-input);
+  background: var(--color-paper);
+}
+
+.subject-browser__subjects > li + li {
+  border-top: 1px solid color-mix(in oklch, var(--color-ink) 8%, transparent);
+}
+
+.subject-browser__subjects summary {
+  display: grid;
+  grid-template-columns: 4rem 1fr auto;
+  align-items: baseline;
+  gap: var(--space-2xs);
+  padding: var(--space-2xs) var(--space-xs);
+  cursor: pointer;
+}
+
+.subject-browser__subjects summary:hover {
+  background: color-mix(in oklch, var(--color-accent) 18%, var(--color-paper));
+}
+
+.subject-browser__code {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.subject-browser__name {
+  font-size: var(--text-sm);
+}
+
+.subject-browser__count {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-ink-2);
+  white-space: nowrap;
+}
+
+.subject-browser__subjects .checklist {
+  padding: var(--space-2xs) var(--space-xs) var(--space-xs) var(--space-md);
+}

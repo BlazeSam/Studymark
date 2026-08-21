@@ -1,7 +1,7 @@
 // Sanity check for course search. Run: node --experimental-strip-types scripts/check-course-search.ts
 import assert from 'node:assert/strict'
 import { searchCourses, scoreCourse } from '../src/lib/courseSearch.ts'
-import { catalogueCourses } from '../src/data/courses.ts'
+import { catalogueCourses, artsAndScienceSubjects } from '../src/data/courses.ts'
 
 // --- the scraped index itself ---
 assert.ok(catalogueCourses.length > 2000, `expected a few thousand courses, got ${catalogueCourses.length}`)
@@ -76,5 +76,29 @@ assert.deepEqual(searchCourses(''), [], 'an empty query returns nothing')
 assert.deepEqual(searchCourses('   '), [], 'whitespace is not a query')
 assert.ok(searchCourses('c', 8).length <= 8, 'the limit is respected')
 assert.deepEqual(searchCourses('zzzzqqq'), [], 'a nonsense query returns nothing rather than noise')
+
+// --- Arts & Science subject list backing the course browser ---
+assert.ok(artsAndScienceSubjects.length > 40, `expected the full A&S subject list, got ${artsAndScienceSubjects.length}`)
+assert.ok(
+  artsAndScienceSubjects.every((s) => /^[A-Z]{2,5}$/.test(s.code) && s.name.length > 0),
+  'every subject has a code and a name',
+)
+for (const code of ['CMPT', 'MATH', 'STAT', 'PHIL', 'BIOL', 'PHYS']) {
+  assert.ok(
+    artsAndScienceSubjects.some((s) => s.code === code),
+    `${code} belongs to Arts & Science and must be listed`,
+  )
+}
+// Colleges outside Arts & Science must not leak in.
+for (const code of ['ACC', 'EE', 'CE', 'NURS']) {
+  assert.ok(
+    !artsAndScienceSubjects.some((s) => s.code === code),
+    `${code} is not an Arts & Science subject`,
+  )
+}
+assert.ok(
+  artsAndScienceSubjects.every((s) => catalogueCourses.some((c) => c.code.startsWith(s.code))),
+  'every listed subject has courses in the index',
+)
 
 console.log(`check-course-search.ts: all assertions passed (${catalogueCourses.length} courses indexed)`)
