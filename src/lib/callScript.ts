@@ -15,17 +15,26 @@ export function buildCallScript(ctx: CallContext): string {
   // The call can't carry a URL, so it points at the link StudyMax already put on the screen.
   const awardLine = ctx.awardName
     ? ` One more thing: the ${ctx.awardName}${ctx.awardDeadlineText ? `, ${ctx.awardDeadlineText.toLowerCase()}` : ''}.` +
-      ' The link is on your StudyMax screen — open it before the deadline.'
+      ' The link is waiting on your StudyMax screen. Please open it before the deadline.'
     : ''
 
-  return `Hi, this is your StudyMax reminder. No need to answer — I'm hanging up in a moment. ${specLine}${awardLine} That's it — good luck.`
+  return (
+    `Hello. I am StudyMax, your personal academic advisor. ` +
+    `There is no need to answer, I will be brief. ${specLine}${awardLine} ` +
+    `That is everything. Take care, and good luck.`
+  )
 }
 
-/** Wraps the script in explicit one-way, no-conversation instructions for the call provider. */
+/**
+ * Wraps the script in explicit one-way, no-conversation instructions for the call provider, plus
+ * the delivery notes: a calm, gentle, unhurried caretaker voice rather than a telemarketer's.
+ */
 export function buildCallTask(script: string): string {
   return [
     'You are placing a one-way informational phone call. Do not have a conversation and do not ask the person any questions.',
     `As soon as the call connects, say exactly this, once: "${script}"`,
+    'Speak slowly, softly and warmly, in a calm and reassuring tone, like a gentle personal healthcare companion.',
+    'Never sound urgent, salesy or excited. Pause briefly between sentences.',
     'Immediately after saying it, say a brief goodbye and end the call. Do not wait for or react to anything the person says.',
   ].join(' ')
 }

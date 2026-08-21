@@ -47,6 +47,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     body: JSON.stringify({
       phone_number: phoneNumber,
       task,
+      // A soft, warm preset rather than Bland's default. Override with BLAND_VOICE to try another
+      // ("June", "Paige", "Nat", "Derek", "Josh", "Florian") without a code change.
+      voice: process.env.BLAND_VOICE || 'maya',
+      // The script is fixed, so there is nothing for the model to be creative about.
+      temperature: 0.3,
+      background_track: 'none',
+      // Without an owned number Bland dials from its shared pool, so the caller ID differs call to
+      // call. Set BLAND_FROM_NUMBER (E.164) to a number owned by the Bland account to pin it.
+      ...(process.env.BLAND_FROM_NUMBER ? { from: process.env.BLAND_FROM_NUMBER } : {}),
       wait_for_greeting: false,
       max_duration: 2,
       record: false,

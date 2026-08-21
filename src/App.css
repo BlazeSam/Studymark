@@ -771,11 +771,6 @@
   margin: var(--space-sm) 0 var(--space-lg);
 }
 
-.intake__optional {
-  font-weight: 400;
-  color: var(--color-ink-2);
-}
-
 .intake__reveal {
   margin-top: var(--space-md);
 }

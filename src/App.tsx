@@ -187,7 +187,7 @@ function useTickUp(target: number) {
 }
 
 function App() {
-  // --- intake: university → program → courses → phone ---
+  // --- intake: university → program → courses (the number is asked for later, with the call) ---
   const saved = useRef(loadSaved()).current
   const [universityId, setUniversityId] = useState<UniversityChoice>(saved.universityId ?? '')
   const [programId, setProgramId] = useState(saved.programId ?? '')
@@ -947,25 +947,8 @@ function App() {
           </div>
         </section>
 
+        {/* The number is asked for once, at the end, where the call is actually offered. */}
         <section className="section section--band intake" data-band="cyan">
-          <div className="step">
-            <span className="step__badge" aria-hidden>
-              4
-            </span>
-            <div className="step__body">
-              <label className="step__label" htmlFor="intake-phone">
-                Phone number <span className="intake__optional">(optional, for call reminders)</span>
-              </label>
-              <input
-                id="intake-phone"
-                type="tel"
-                className="resources__input"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+1 555 555 5555"
-              />
-            </div>
-          </div>
           <button type="button" className="btn intake__reveal" disabled={!selectedProgram} onClick={() => setRevealed(true)}>
             Reveal what my school hides
           </button>
