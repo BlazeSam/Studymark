@@ -273,12 +273,27 @@ function App() {
   const takenCourses = useMemo(() => [...completed].sort(), [completed])
 
   const [courseQuery, setCourseQuery] = useState('')
+  const [resultsOpen, setResultsOpen] = useState(false)
+  const searchRef = useRef<HTMLDivElement>(null)
   const courseResults = useMemo(() => searchCourses(courseQuery), [courseQuery])
 
+  // Adding deliberately leaves the query and the list alone: one search usually turns up several
+  // courses a student took ("phil 24" is both symbolic logic courses), and clearing after each add
+  // would make them retype it. The list closes on Escape or a click outside — never on clicking the
+  // input itself, which is where they go to edit the query.
   function addCourse(code: string) {
     setCompleted((prev) => new Set(prev).add(code))
-    setCourseQuery('')
+    setResultsOpen(true)
   }
+
+  useEffect(() => {
+    if (!resultsOpen) return
+    function onPointerDown(e: PointerEvent) {
+      if (!searchRef.current?.contains(e.target as Node)) setResultsOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [resultsOpen])
 
   function toggleCourse(code: string) {
     setCompleted((prev) => {
@@ -601,7 +616,7 @@ function App() {
                   )}
                   {uploadStatus === 'error' && <p className="upload-status upload-status--error">{uploadError}</p>}
 
-                  <div className="course-search">
+                  <div className="course-search" ref={searchRef}>
                     <label className="step__label" htmlFor="course-search-input">
                       Add any course you&rsquo;ve taken
                     </label>
@@ -614,18 +629,29 @@ function App() {
                       id="course-search-input"
                       className="resources__input"
                       value={courseQuery}
-                      onChange={(e) => setCourseQuery(e.target.value)}
+                      onChange={(e) => {
+                        setCourseQuery(e.target.value)
+                        setResultsOpen(true)
+                      }}
+                      onFocus={() => setResultsOpen(true)}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter' && courseResults[0]) {
+                        if (e.key === 'Escape') {
+                          setResultsOpen(false)
+                          return
+                        }
+                        // Enter takes the top hit that isn't already added, so holding it down walks
+                        // the list instead of re-adding the same course.
+                        const next = courseResults.find((c) => !completed.has(c.code))
+                        if (e.key === 'Enter' && next) {
                           e.preventDefault()
-                          addCourse(courseResults[0].code)
+                          addCourse(next.code)
                         }
                       }}
                       placeholder={'e.g. CMPT 280, or “data structures”'}
                       autoComplete="off"
                       aria-label="Search for a course by code or title"
                     />
-                    {courseQuery.trim().length > 0 && (
+                    {resultsOpen && courseQuery.trim().length > 0 && (
                       <ul className="course-search__results">
                         {courseResults.length === 0 ? (
                           <li className="course-search__empty">
@@ -646,6 +672,14 @@ function App() {
                               </button>
                             </li>
                           ))
+                        )}
+                        {courseResults.length > 0 && (
+                          <li className="course-search__foot">
+                            <span>Keeps showing so you can add several — Esc or click away to close.</span>
+                            <button type="button" className="linkish" onClick={() => setResultsOpen(false)}>
+                              Done
+                            </button>
+                          </li>
                         )}
                       </ul>
                     )}

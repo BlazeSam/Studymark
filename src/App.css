@@ -1387,3 +1387,19 @@ a.plan__course-name:hover,
 .subject-browser__subjects .checklist {
   padding: var(--space-2xs) var(--space-xs) var(--space-xs) var(--space-md);
 }
+
+/* ---------- course search: results persist across adds ---------- */
+
+.course-search__foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2xs);
+  padding: var(--space-2xs) var(--space-xs);
+  border-top: 1px solid color-mix(in oklch, var(--color-ink) 10%, transparent);
+  font-size: var(--text-xs);
+  color: var(--color-ink-2);
+  position: sticky;
+  bottom: 0;
+  background: var(--color-paper);
+}
